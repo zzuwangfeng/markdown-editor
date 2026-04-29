@@ -1,0 +1,52 @@
+{
+  "name": "flowmark-editor",
+  "version": "1.0.0",
+  "description": "A local Markdown editor for AI workflow",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "start:forge": "electron-forge start",
+    "package": "electron-forge package",
+    "make": "electron-forge make",
+    "build": "electron-builder --dir",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win"
+  },
+  "author": "FlowMark",
+  "license": "MIT",
+  "devDependencies": {
+    "@electron-forge/cli": "^7.2.0",
+    "@electron-forge/maker-dmg": "^7.2.0",
+    "@electron-forge/maker-zip": "^7.11.1",
+    "electron": "^31.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.flowmark.editor",
+    "productName": "FlowMark Editor",
+    "directories": {
+      "output": "dist"
+    },
+    "electronDownload": {
+      "mirror": "https://npmmirror.com/mirrors/electron/"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.productivity"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*"
+    ]
+  },
+  "keywords": [],
+  "type": "commonjs"
+}
