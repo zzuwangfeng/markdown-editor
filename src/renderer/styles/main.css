@@ -20,7 +20,9 @@
   --font-mono: "SF Mono", "Fira Code", "Consolas", monospace;
   --radius-sm: 4px;
   --radius-md: 8px;
-  --transition: 150ms ease;
+  --transition: 200ms ease;
+  --transition-fast: 150ms ease;
+  --transition-slow: 300ms ease;
 }
 
 /* 深色主题 */
@@ -136,10 +138,24 @@ body {
   z-index: 1000;
   display: none;
   padding: 4px;
+  opacity: 0;
+  transform: translateY(-8px) scale(0.95);
 }
 
 .dropdown-menu.visible {
   display: block;
+  animation: dropdownIn 200ms ease forwards;
+}
+
+@keyframes dropdownIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .dropdown-item {
@@ -274,10 +290,23 @@ body {
 
 .tree-children {
   display: none;
+  overflow: hidden;
 }
 
 .tree-children.expanded {
   display: block;
+  animation: slideDown 200ms ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* Editor Container */
@@ -409,14 +438,19 @@ body {
   justify-content: center;
   background: var(--bg-primary);
   z-index: 1;
+  transition: opacity var(--transition-slow);
 }
 
 .editor-welcome.hidden {
-  display: none;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  z-index: 0;
 }
 
 .welcome-icon {
   margin-bottom: 20px;
+  animation: floatIn 400ms ease 100ms both;
 }
 
 .welcome-title {
@@ -424,12 +458,25 @@ body {
   font-weight: 600;
   color: var(--text-primary);
   margin: 0 0 12px;
+  animation: floatIn 400ms ease 200ms both;
 }
 
 .welcome-desc {
   font-size: 14px;
   color: var(--text-secondary);
   margin: 0;
+  animation: floatIn 400ms ease 300ms both;
+}
+
+@keyframes floatIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* 编辑器区域包装 */
@@ -498,10 +545,15 @@ body {
   line-height: 1.7;
   color: var(--text-primary);
   background: var(--bg-secondary);
+  transition: opacity var(--transition-fast);
 }
 
 .preview-content.hidden {
-  display: none;
+  opacity: 0;
+  width: 0;
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
 }
 
 .preview-content h1 {
@@ -830,10 +882,24 @@ body {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   z-index: 1000;
   display: none;
+  opacity: 0;
+  transform: scale(0.95);
 }
 
 .context-menu.visible {
   display: block;
+  animation: contextMenuIn 150ms ease forwards;
+}
+
+@keyframes contextMenuIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .context-menu-item {
@@ -935,10 +1001,36 @@ body {
   align-items: center;
   justify-content: center;
   z-index: 2000;
+  opacity: 0;
+  transition: opacity var(--transition);
 }
 
 .dialog-overlay.visible, .confirm-overlay.visible {
   display: flex;
+  animation: fadeIn 200ms ease forwards;
+}
+
+.dialog-overlay.visible .dialog,
+.dialog-overlay.visible .confirm-dialog,
+.confirm-overlay.visible .dialog,
+.confirm-overlay.visible .confirm-dialog {
+  animation: dialogIn 200ms ease forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes dialogIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 .dialog, .confirm-dialog {
@@ -1035,6 +1127,7 @@ body {
 
 .about-overlay.visible {
   display: flex;
+  animation: fadeIn 200ms ease forwards;
 }
 
 .about-dialog {
@@ -1045,6 +1138,18 @@ body {
   min-width: 280px;
   text-align: center;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: aboutIn 250ms ease forwards;
+}
+
+@keyframes aboutIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 .about-close {

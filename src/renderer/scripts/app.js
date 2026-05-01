@@ -621,7 +621,9 @@
       content.innerHTML = `${icons.file}<span class="tree-item-name">${item.name}</span>`;
     }
 
-    content.addEventListener('click', e => handleTreeItemClick(e, item, div));
+    content.addEventListener('click', function(e) {
+      handleTreeItemClick(e, item, div);
+    });
     content.addEventListener('contextmenu', e => showContextMenu(e, item));
 
     // 文件夹展开/折叠箭头点击
@@ -683,11 +685,10 @@
    * 处理文件树项点击
    */
   async function handleTreeItemClick(e, item, treeItem) {
-    // 如果点击的是展开箭头，不处理文件打开
-    if (e.target.classList.contains('tree-item-expand')) return;
+    // 如果点击的是展开箭头区域，不处理文件打开
+    if (e.target.closest('.tree-item-expand')) return;
 
     if (item.isDirectory) {
-      // 切换展开/折叠
       toggleFolderExpand(treeItem, item);
       return;
     }
@@ -697,14 +698,47 @@
       await saveCurrentFile();
     }
 
-    // 更新选中状态
+    // 更新选中状态 - 直接从 treeItem 找到 content 元素
+    const contentEl = treeItem.querySelector('.tree-item-content');
     document.querySelectorAll('.tree-item-content.selected').forEach(el => {
       el.classList.remove('selected');
     });
-    e.currentTarget.classList.add('selected');
+    if (contentEl) contentEl.classList.add('selected');
 
-    // 加载文件
-    await loadFile(item.path, item.name);
+    // 直接操作 DOM 显示编辑器（绕过异步问题）
+    const wrapper = document.getElementById('editor-wrapper');
+    const welcome = document.getElementById('editor-welcome');
+    const editor = document.getElementById('editor');
+    const placeholder = document.getElementById('editor-placeholder');
+
+    if (wrapper) wrapper.style.display = 'flex';
+    if (welcome) welcome.classList.add('hidden');
+
+    // 加载并显示文件内容
+    const content = await window.electronAPI.readFile(item.path);
+    if (editor) {
+      editor.innerHTML = markdownToHtml(content);
+      editor.contentEditable = 'true';
+      editor.style.opacity = '1';
+      editor.style.pointerEvents = 'auto';
+    }
+    if (placeholder) {
+      placeholder.style.display = content ? 'none' : 'block';
+    }
+
+    // 更新顶部文件名
+    const fileNameEl = document.getElementById('current-file-name');
+    if (fileNameEl) fileNameEl.textContent = item.name;
+
+    currentFilePath = item.path;
+    currentFileName = item.name;
+    currentFileContent = content;
+
+    const stat = await window.electronAPI.getFileStat(item.path);
+    lastModifiedTime = stat ? stat.mtime : Date.now();
+
+    updateOutline();
+    updateStats();
   }
 
   /**
