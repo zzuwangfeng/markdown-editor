@@ -209,6 +209,89 @@
     // 表格对话框
     document.getElementById('table-cancel').addEventListener('click', hideTableDialog);
     document.getElementById('table-insert').addEventListener('click', insertTableFromDialog);
+
+    // 监听菜单事件
+    if (window.electronAPI && window.electronAPI.onMenuEvent) {
+      window.electronAPI.onMenuEvent(handleMenuEvent);
+    }
+  }
+
+  /**
+   * 处理菜单事件
+   */
+  function handleMenuEvent(action) {
+    switch (action) {
+      case 'new-file':
+        createNewFile();
+        break;
+      case 'open-workspace':
+        openWorkspace();
+        break;
+      case 'save':
+        if (currentFilePath) saveCurrentFile();
+        break;
+      case 'toggle-sidebar':
+        toggleSidebar();
+        break;
+      case 'toggle-outline':
+        toggleOutline();
+        break;
+      case 'settings':
+        showSettingsDialog();
+        break;
+      case 'about':
+        showAboutDialog();
+        break;
+    }
+  }
+
+  /**
+   * 切换侧边栏显示
+   */
+  function toggleSidebar() {
+    sidebar.style.display = sidebar.style.display === 'none' ? 'flex' : 'none';
+  }
+
+  /**
+   * 切换大纲显示
+   */
+  function toggleOutline() {
+    const outlinePanel = document.getElementById('outline-panel');
+    outlinePanel.style.display = outlinePanel.style.display === 'none' ? 'block' : 'none';
+  }
+
+  /**
+   * 显示设置对话框
+   */
+  function showSettingsDialog() {
+    showDialog('主题设置', getCurrentTheme(), async theme => {
+      if (theme) setTheme(theme.trim());
+    });
+  }
+
+  /**
+   * 显示关于对话框
+   */
+  function showAboutDialog() {
+    showConfirm('FlowMark Editor', '版本 1.0.0\n一款轻量级本地 Markdown 编辑器', null);
+  }
+
+  /**
+   * 获取当前主题
+   */
+  function getCurrentTheme() {
+    return document.documentElement.getAttribute('data-theme') || 'light';
+  }
+
+  /**
+   * 设置主题
+   */
+  function setTheme(theme) {
+    if (theme === 'system') {
+      document.documentElement.removeAttribute('data-theme');
+    } else {
+      document.documentElement.setAttribute('data-theme', theme);
+    }
   }
 
   // ========================================
@@ -478,54 +561,95 @@
   }
 
   /**
-   * 创建文件树节点
+   * 创建文件树节点（可展开的目录结构）
    */
-  function createTreeItem(item) {
+  function createTreeItem(item, level = 0) {
     const div = document.createElement('div');
     div.className = 'tree-item';
     div.dataset.path = item.path;
     div.dataset.isDirectory = item.isDirectory;
+    div.style.paddingLeft = `${level * 16}px`;
 
     const content = document.createElement('div');
     content.className = 'tree-item-content';
 
+    // 文件夹显示展开箭头，文件不显示
     if (item.isDirectory) {
-      content.innerHTML = `${icons.arrow}<span class="tree-item-name">${item.name}</span>`;
+      content.innerHTML = `<span class="tree-item-expand" data-expanded="false">${icons.arrow}</span>${icons.folder}<span class="tree-item-name">${item.name}</span>`;
     } else {
       content.innerHTML = `${icons.file}<span class="tree-item-name">${item.name}</span>`;
     }
 
-    content.addEventListener('click', e => handleTreeItemClick(e, item));
+    content.addEventListener('click', e => handleTreeItemClick(e, item, div));
     content.addEventListener('contextmenu', e => showContextMenu(e, item));
+
+    // 文件夹展开/折叠箭头点击
+    const expandBtn = content.querySelector('.tree-item-expand');
+    if (expandBtn) {
+      expandBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        toggleFolderExpand(div, item);
+      });
+    }
 
     div.appendChild(content);
 
-    // 子节点
-    if (item.isDirectory && item.children && item.children.length > 0) {
+    // 如果是文件夹，预留子节点容器
+    if (item.isDirectory) {
       const children = document.createElement('div');
       children.className = 'tree-children';
-      item.children.forEach(child => {
-        children.appendChild(createTreeItem(child));
-      });
+      children.style.display = 'none';
       div.appendChild(children);
-
-      // 展开/折叠箭头
-      content.querySelector('.tree-item-expand')?.addEventListener('click', e => {
-        e.stopPropagation();
-        const arrow = content.querySelector('.tree-item-expand');
-        arrow.classList.toggle('expanded');
-        children.classList.toggle('expanded');
-      });
     }
 
     return div;
   }
 
   /**
+   * 切换文件夹展开/折叠状态
+   */
+  async function toggleFolderExpand(treeItem, item) {
+    const children = treeItem.querySelector('.tree-children');
+    const expandBtn = treeItem.querySelector('.tree-item-expand');
+    const isExpanded = expandBtn.dataset.expanded === 'true';
+
+    if (!isExpanded) {
+      // 展开：加载子项目（如果尚未加载）
+      if (children.children.length === 0 && item.children && item.children.length > 0) {
+        item.children.forEach(child => {
+          children.appendChild(createTreeItem(child, 1));
+        });
+      } else if (children.children.length === 0) {
+        // 目录为空或尚未加载
+        const empty = document.createElement('div');
+        empty.className = 'tree-empty';
+        empty.textContent = '空文件夹';
+        empty.style.cssText = 'color: var(--text-placeholder); font-size: 12px; padding: 4px 8px;';
+        children.appendChild(empty);
+      }
+      children.style.display = 'block';
+      expandBtn.dataset.expanded = 'true';
+      expandBtn.classList.add('expanded');
+    } else {
+      // 折叠
+      children.style.display = 'none';
+      expandBtn.dataset.expanded = 'false';
+      expandBtn.classList.remove('expanded');
+    }
+  }
+
+  /**
    * 处理文件树项点击
    */
-  async function handleTreeItemClick(e, item) {
-    if (item.isDirectory) return;
+  async function handleTreeItemClick(e, item, treeItem) {
+    // 如果点击的是展开箭头，不处理文件打开
+    if (e.target.classList.contains('tree-item-expand')) return;
+
+    if (item.isDirectory) {
+      // 切换展开/折叠
+      toggleFolderExpand(treeItem, item);
+      return;
+    }
 
     // 保存当前文件
     if (currentFilePath && !isSaving) {
@@ -1522,7 +1646,8 @@
     if (!contextMenuTarget) return;
 
     const item = contextMenuTarget;
-    const parentPath = currentWorkspace;
+    // 获取父目录：如果是文件夹则直接在内部创建，否则取文件的父目录
+    const parentPath = item.isDirectory ? item.path : item.path.substring(0, item.path.lastIndexOf('/'));
 
     hideContextMenu();
 

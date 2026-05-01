@@ -1,6 +1,6 @@
 /* FlowMark Editor - Main Styles */
 
-/* CSS Variables */
+/* CSS Variables - 浅色主题 */
 :root {
   --bg-primary: #FFFFFF;
   --bg-secondary: #F7F8FA;
@@ -21,6 +21,22 @@
   --radius-sm: 4px;
   --radius-md: 8px;
   --transition: 150ms ease;
+}
+
+/* 深色主题 */
+[data-theme="dark"] {
+  --bg-primary: #1E1E1E;
+  --bg-secondary: #252526;
+  --bg-hover: #2D2D30;
+  --bg-active: #37373D;
+  --text-primary: #CCCCCC;
+  --text-secondary: #858585;
+  --text-placeholder: #5A5A5A;
+  --border-color: #3C3C3C;
+  --border-input: #4A4A4A;
+  --accent: #0D7CF0;
+  --accent-hover: #4090F0;
+  --accent-light: #264F78;
 }
 
 /* Reset */

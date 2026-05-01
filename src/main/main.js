@@ -1,5 +1,5 @@
-// FlowMark Editor - Main Process
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+// FlowMark Editor - 主进程
+const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -28,6 +28,7 @@ function createWindow() {
 
 app.whenReady().then(() => {
   createWindow();
+  createMenu();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -35,6 +36,68 @@ app.whenReady().then(() => {
     }
   });
 });
+
+// 创建 macOS 顶部菜单栏
+function createMenu() {
+  const template = [
+    {
+      label: 'FlowMark',
+      submenu: [
+        { label: '关于 FlowMark', role: 'about' },
+        { type: 'separator' },
+        { label: '偏好设置', accelerator: 'Cmd+,', click: () => mainWindow.webContents.send('menu-event', 'settings') },
+        { type: 'separator' },
+        { label: '退出', accelerator: 'Cmd+Q', role: 'quit' }
+      ]
+    },
+    {
+      label: '文件',
+      submenu: [
+        { label: '新建文件', accelerator: 'Cmd+N', click: () => mainWindow.webContents.send('menu-event', 'new-file') },
+        { label: '打开工作区', accelerator: 'Cmd+O', click: () => mainWindow.webContents.send('menu-event', 'open-workspace') },
+        { type: 'separator' },
+        { label: '保存', accelerator: 'Cmd+S', click: () => mainWindow.webContents.send('menu-event', 'save') },
+        { type: 'separator' },
+        { label: '关闭标签', accelerator: 'Cmd+W', role: 'close' }
+      ]
+    },
+    {
+      label: '编辑',
+      submenu: [
+        { label: '撤销', accelerator: 'Cmd+Z', role: 'undo' },
+        { label: '重做', accelerator: 'Cmd+Shift+Z', role: 'redo' },
+        { type: 'separator' },
+        { label: '剪切', accelerator: 'Cmd+X', role: 'cut' },
+        { label: '复制', accelerator: 'Cmd+C', role: 'copy' },
+        { label: '粘贴', accelerator: 'Cmd+V', role: 'paste' },
+        { type: 'separator' },
+        { label: '全选', accelerator: 'Cmd+A', role: 'selectAll' }
+      ]
+    },
+    {
+      label: '视图',
+      submenu: [
+        { label: '侧边栏', accelerator: 'Cmd+B', click: () => mainWindow.webContents.send('menu-event', 'toggle-sidebar') },
+        { label: '大纲', accelerator: 'Cmd+Shift+O', click: () => mainWindow.webContents.send('menu-event', 'toggle-outline') },
+        { type: 'separator' },
+        { label: '放大', accelerator: 'Cmd+Plus', role: 'zoomIn' },
+        { label: '缩小', accelerator: 'Cmd+-', role: 'zoomOut' },
+        { label: '重置缩放', accelerator: 'Cmd+0', role: 'resetZoom' },
+        { type: 'separator' },
+        { label: '切换全屏', accelerator: 'Ctrl+Cmd+F', role: 'togglefullscreen' }
+      ]
+    },
+    {
+      label: '帮助',
+      submenu: [
+        { label: '关于', click: () => mainWindow.webContents.send('menu-event', 'about') }
+      ]
+    }
+  ];
+
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
