@@ -36,6 +36,7 @@
   let dialogCancel, dialogConfirm;
   let confirmOverlay, confirmTitle, confirmMessage;
   let confirmCancel, confirmOk;
+  let aboutOverlay, aboutClose;
 
   // ========================================
   // 斜杠命令配置 - 输入 / 唤起命令面板
@@ -125,6 +126,8 @@
     confirmMessage = document.getElementById('confirm-message');
     confirmCancel = document.getElementById('confirm-cancel');
     confirmOk = document.getElementById('confirm-ok');
+    aboutOverlay = document.getElementById('about-overlay');
+    aboutClose = document.getElementById('about-close');
 
     // 绑定所有事件监听器
     bindEvents();
@@ -214,6 +217,12 @@
     if (window.electronAPI && window.electronAPI.onMenuEvent) {
       window.electronAPI.onMenuEvent(handleMenuEvent);
     }
+
+    // 关于对话框关闭
+    aboutClose.addEventListener('click', hideAboutDialog);
+    aboutOverlay.addEventListener('click', e => {
+      if (e.target === aboutOverlay) hideAboutDialog();
+    });
   }
 
   /**
@@ -270,10 +279,17 @@
   }
 
   /**
-   * 显示关于对话框
+   * 显示关于对话框 - macOS 风格
    */
   function showAboutDialog() {
-    showConfirm('FlowMark Editor', '版本 1.0.0\n一款轻量级本地 Markdown 编辑器', null);
+    aboutOverlay.classList.add('visible');
+  }
+
+  /**
+   * 关闭关于对话框
+   */
+  function hideAboutDialog() {
+    aboutOverlay.classList.remove('visible');
   }
 
   /**
