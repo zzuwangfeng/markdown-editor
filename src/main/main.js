@@ -214,3 +214,19 @@ ipcMain.handle('show-item-in-folder', async (event, itemPath) => {
     return { success: false, error: error.message };
   }
 });
+
+ipcMain.handle('select-image', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile'],
+    filters: [
+      { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'] }
+    ]
+  });
+
+  if (!result.canceled && result.filePaths.length > 0) {
+    const filePath = result.filePaths[0];
+    const fileName = path.basename(filePath);
+    return { filePath, fileName };
+  }
+  return null;
+});

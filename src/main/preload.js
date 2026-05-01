@@ -13,5 +13,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   writeImageFile: (dir, name, base64Data) => ipcRenderer.invoke('write-image-file', dir, name, base64Data),
   getFileStat: (filePath) => ipcRenderer.invoke('get-file-stat', filePath),
   createDirectory: (dirPath) => ipcRenderer.invoke('create-directory', dirPath),
-  showItemInFolder: (itemPath) => ipcRenderer.invoke('show-item-in-folder', itemPath)
+  showItemInFolder: (itemPath) => ipcRenderer.invoke('show-item-in-folder', itemPath),
+  selectImage: () => ipcRenderer.invoke('select-image')
 });

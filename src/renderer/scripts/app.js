@@ -1,62 +1,45 @@
-// FlowMark Editor - Main Application
+// FlowMark Editor - 主应用文件
+// 功能：Markdown WYSIWYG 编辑器，提供实时预览、文件管理等功能
 (function() {
   'use strict';
 
-  // State
-  let currentWorkspace = null;
-  let currentFilePath = null;
-  let currentFileName = null;
-  let currentFileContent = null;
-  let saveTimeout = null;
-  let isSaving = false;
-  let contextMenuTarget = null;
-  let slashPanelVisible = false;
-  let slashSelectedIndex = 0;
-  let slashFilter = '';
-  let lastModifiedTime = null;
-  let fileWatcherInterval = null;
-  let assetsFolderPath = null;
-  let isPreviewMode = false;
+  // ========================================
+  // 状态变量 - 保存应用当前状态
+  // ========================================
+  let currentWorkspace = null;      // 当前工作区路径
+  let currentFilePath = null;        // 当前打开文件的完整路径
+  let currentFileName = null;        // 当前打开文件的名称
+  let currentFileContent = null;      // 当前文件内容（用于检测修改）
+  let saveTimeout = null;             // 自动保存定时器
+  let isSaving = false;              // 是否正在保存
+  let contextMenuTarget = null;      // 右键菜单目标文件/文件夹
+  let slashPanelVisible = false;     // 斜杠命令面板是否可见
+  let slashSelectedIndex = 0;        // 斜杠命令面板选中索引
+  let slashFilter = '';             // 斜杠命令面板过滤文本
+  let lastModifiedTime = null;       // 文件最后修改时间（用于检测外部修改）
+  let fileWatcherInterval = null;    // 文件监控定时器
+  let assetsFolderPath = null;       // 图片资源文件夹路径
+  let isPreviewMode = false;         // 是否启用实时预览
 
-  // DOM Elements
-  const sidebar = document.getElementById('sidebar');
-  const fileTree = document.getElementById('file-tree');
-  const emptyState = document.getElementById('empty-state');
-  const workspaceName = document.getElementById('workspace-name');
-  const btnOpenWorkspace = document.getElementById('btn-open-workspace');
-  const btnNewFile = document.getElementById('btn-new-file');
-  const btnNewFolder = document.getElementById('btn-new-folder');
-  const editor = document.getElementById('editor');
-  const editorPlaceholder = document.getElementById('editor-placeholder');
-  const currentFileNameEl = document.getElementById('current-file-name');
-  const saveStatus = document.getElementById('save-status');
-  const wordCount = document.getElementById('word-count');
-  const lineInfo = document.getElementById('line-info');
-  const outlineList = document.getElementById('outline-list');
-  const contextMenu = document.getElementById('context-menu');
-  const formatToolbar = document.getElementById('format-toolbar');
-  const slashPanel = document.getElementById('slash-panel');
-  const slashList = document.getElementById('slash-list');
-  const conflictOverlay = document.getElementById('conflict-overlay');
-  const conflictMessage = document.getElementById('conflict-message');
-  const tableDialogOverlay = document.getElementById('table-dialog-overlay');
-  const imageProgress = document.getElementById('image-progress');
-  const btnPreview = document.getElementById('btn-preview');
-  const previewContent = document.getElementById('preview-content');
+  // ========================================
+  // DOM 元素引用 - 在 init() 中初始化
+  // ========================================
+  let sidebar, fileTree, emptyState, workspaceName;
+  let btnAdd, dropdownMenu, editor, editorPlaceholder;
+  let currentFileNameEl, saveStatus, wordCount, lineInfo;
+  let outlineList, contextMenu, formatToolbar;
+  let slashPanel, slashList;
+  let conflictOverlay, conflictMessage;
+  let tableDialogOverlay, imageProgress;
+  let btnPreview, previewContent;
+  let dialogOverlay, dialogTitle, dialogInput;
+  let dialogCancel, dialogConfirm;
+  let confirmOverlay, confirmTitle, confirmMessage;
+  let confirmCancel, confirmOk;
 
-  // Dialog elements
-  const dialogOverlay = document.getElementById('dialog-overlay');
-  const dialogTitle = document.getElementById('dialog-title');
-  const dialogInput = document.getElementById('dialog-input');
-  const dialogCancel = document.getElementById('dialog-cancel');
-  const dialogConfirm = document.getElementById('dialog-confirm');
-  const confirmOverlay = document.getElementById('confirm-overlay');
-  const confirmTitle = document.getElementById('confirm-title');
-  const confirmMessage = document.getElementById('confirm-message');
-  const confirmCancel = document.getElementById('confirm-cancel');
-  const confirmOk = document.getElementById('confirm-ok');
-
-  // Slash Commands
+  // ========================================
+  // 斜杠命令配置 - 输入 / 唤起命令面板
+  // ========================================
   const slashCommands = [
     { id: 'h1', title: '一级标题', description: '大标题', icon: 'H1', action: () => insertHeading(1) },
     { id: 'h2', title: '二级标题', description: '中标题', icon: 'H2', action: () => insertHeading(2) },
@@ -76,7 +59,9 @@
     { id: 'hr', title: '分割线', description: '水平分隔线', icon: '—', action: () => insertHorizontalRule() },
   ];
 
-  // Icons
+  // ========================================
+  // SVG 图标定义
+  // ========================================
   const icons = {
     folder: `<svg class="tree-item-icon" viewBox="0 0 18 18" fill="none">
       <path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h3.172a1.5 1.5 0 0 1 1.06.44l.658.658H14.5A1.5 1.5 0 0 1 16 5.5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 2 12.5v-8z" stroke="currentColor" stroke-width="1.3"/>
@@ -90,21 +75,87 @@
     </svg>`
   };
 
-  // Initialize
+  // ========================================
+  // 初始化入口
+  // ========================================
   async function init() {
+    // 等待 DOM 加载完成
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', doInit);
+    } else {
+      doInit();
+    }
+  }
+
+  // ========================================
+  // DOM 初始化和数据绑定
+  // ========================================
+  function doInit() {
+    // 获取所有 DOM 元素引用
+    sidebar = document.getElementById('sidebar');
+    fileTree = document.getElementById('file-tree');
+    emptyState = document.getElementById('empty-state');
+    workspaceName = document.getElementById('workspace-name');
+    btnAdd = document.getElementById('btn-add');
+    dropdownMenu = document.getElementById('dropdown-menu');
+    editor = document.getElementById('editor');
+    editorPlaceholder = document.getElementById('editor-placeholder');
+    currentFileNameEl = document.getElementById('current-file-name');
+    saveStatus = document.getElementById('save-status');
+    wordCount = document.getElementById('word-count');
+    lineInfo = document.getElementById('line-info');
+    outlineList = document.getElementById('outline-list');
+    contextMenu = document.getElementById('context-menu');
+    formatToolbar = document.getElementById('format-toolbar');
+    slashPanel = document.getElementById('slash-panel');
+    slashList = document.getElementById('slash-list');
+    conflictOverlay = document.getElementById('conflict-overlay');
+    conflictMessage = document.getElementById('conflict-message');
+    tableDialogOverlay = document.getElementById('table-dialog-overlay');
+    imageProgress = document.getElementById('image-progress');
+    btnPreview = document.getElementById('btn-preview');
+    previewContent = document.getElementById('preview-content');
+    dialogOverlay = document.getElementById('dialog-overlay');
+    dialogTitle = document.getElementById('dialog-title');
+    dialogInput = document.getElementById('dialog-input');
+    dialogCancel = document.getElementById('dialog-cancel');
+    dialogConfirm = document.getElementById('dialog-confirm');
+    confirmOverlay = document.getElementById('confirm-overlay');
+    confirmTitle = document.getElementById('confirm-title');
+    confirmMessage = document.getElementById('confirm-message');
+    confirmCancel = document.getElementById('confirm-cancel');
+    confirmOk = document.getElementById('confirm-ok');
+
+    // 绑定所有事件监听器
     bindEvents();
+
+    // 更新目录大纲
     updateOutline();
-    // Preview is on by default, ensure preview button is active
+
+    // 默认启用预览模式
     btnPreview.classList.add('active');
     isPreviewMode = true;
   }
 
-  // Event Bindings
+  // ========================================
+  // 事件绑定
+  // ========================================
   function bindEvents() {
-    btnOpenWorkspace.addEventListener('click', openWorkspace);
-    btnNewFile.addEventListener('click', createNewFile);
-    btnNewFolder.addEventListener('click', createNewFolder);
+    // 预览按钮
     btnPreview.addEventListener('click', togglePreview);
+
+    // 添加按钮（下拉菜单触发）
+    btnAdd.addEventListener('click', handleAddClick);
+
+    // 下拉菜单项目点击
+    dropdownMenu.querySelectorAll('.dropdown-item').forEach(item => {
+      item.addEventListener('click', () => handleDropdownAction(item.dataset.action));
+    });
+
+    // 点击其他区域关闭下拉菜单
+    document.addEventListener('click', hideDropdownMenu);
+
+    // 编辑器输入事件
     editor.addEventListener('input', handleEditorInput);
     editor.addEventListener('keyup', handleEditorKeyup);
     editor.addEventListener('mouseup', handleSelectionChange);
@@ -114,26 +165,28 @@
     editor.addEventListener('dragover', handleDragOver);
     editor.addEventListener('keydown', handleEditorKeydown);
     editor.addEventListener('input', handleEditorInputForSlash);
+
+    // 上下文菜单和斜杠面板
     document.addEventListener('click', hideContextMenu);
     document.addEventListener('click', hideSlashPanel);
     document.addEventListener('keydown', handleGlobalKeydown);
 
-    // Insert menu buttons
+    // 插入菜单按钮
     document.querySelectorAll('.menu-btn').forEach(btn => {
       btn.addEventListener('click', () => executeMenuCommand(btn.dataset.cmd));
     });
 
-    // Format toolbar buttons
+    // 格式化工具栏按钮
     formatToolbar.querySelectorAll('.toolbar-btn').forEach(btn => {
       btn.addEventListener('click', () => handleFormat(btn.dataset.format));
     });
 
-    // Context menu items
+    // 上下文菜单项
     contextMenu.querySelectorAll('.context-menu-item').forEach(item => {
       item.addEventListener('click', () => handleContextMenuAction(item.dataset.action));
     });
 
-    // Dialog
+    // 对话框按钮
     dialogCancel.addEventListener('click', hideDialog);
     dialogConfirm.addEventListener('click', confirmDialog);
     dialogInput.addEventListener('keydown', e => {
@@ -141,24 +194,30 @@
       if (e.key === 'Escape') hideDialog();
     });
 
-    // Confirm dialog
+    // 确认对话框
     confirmCancel.addEventListener('click', hideConfirm);
     confirmOk.addEventListener('click', async () => {
       if (confirmCallback) await confirmCallback();
       hideConfirm();
     });
 
-    // Conflict dialog
+    // 冲突对话框按钮
     document.getElementById('conflict-overwrite').addEventListener('click', () => handleConflict('overwrite'));
     document.getElementById('conflict-keep').addEventListener('click', () => handleConflict('keep'));
     document.getElementById('conflict-reload').addEventListener('click', () => handleConflict('reload'));
 
-    // Table dialog
+    // 表格对话框
     document.getElementById('table-cancel').addEventListener('click', hideTableDialog);
     document.getElementById('table-insert').addEventListener('click', insertTableFromDialog);
   }
 
-  // Open Workspace
+  // ========================================
+  // 工作区相关功能
+  // ========================================
+
+  /**
+   * 打开工作区选择文件夹
+   */
   async function openWorkspace() {
     const path = await window.electronAPI.selectWorkspace();
     if (path) {
@@ -172,60 +231,185 @@
     }
   }
 
-  // Create new file
+  /**
+   * 处理添加按钮点击
+   * - 未选择工作区：打开文件夹选择对话框
+   * - 已选择工作区：显示下拉菜单
+   */
+  function handleAddClick(e) {
+    e.stopPropagation();
+
+    if (!currentWorkspace) {
+      openWorkspace();
+      return;
+    }
+
+    dropdownMenu.classList.toggle('visible');
+  }
+
+  /**
+   * 隐藏下拉菜单
+   */
+  function hideDropdownMenu(e) {
+    if (!e.target.closest('.add-dropdown')) {
+      dropdownMenu.classList.remove('visible');
+    }
+  }
+
+  /**
+   * 处理下拉菜单操作
+   */
+  async function handleDropdownAction(action) {
+    dropdownMenu.classList.remove('visible');
+
+    switch (action) {
+      case 'new-file':
+        createNewFile();
+        break;
+      case 'new-folder':
+        createNewFolder();
+        break;
+      case 'change-workspace':
+        openWorkspace();
+        break;
+    }
+  }
+
+  // ========================================
+  // 文件和文件夹操作
+  // ========================================
+
+  /**
+   * 创建新文件
+   * 验证：非空、去除首尾空格、检查非法字符
+   */
   async function createNewFile() {
-    if (!currentWorkspace) {
-      alert('请先选择工作区');
-      return;
-    }
-
     showDialog('新建文件', '', async name => {
-      if (name) {
-        const fileName = name.endsWith('.md') ? name : name + '.md';
-        const result = await window.electronAPI.createItem(currentWorkspace, fileName, false);
-        if (result.success) {
-          await refreshFileTree();
-          await openFile(result.path);
-        }
+      // 去除首尾空格
+      const trimmedName = name ? name.trim() : '';
+
+      // 验证：名字不能为空
+      if (!trimmedName) {
+        showConfirm('错误', '文件名不能为空', null);
+        return;
+      }
+
+      // 验证：不能包含非法字符
+      const invalidChars = /[<>:"/\\|?*\x00-\x1f]/;
+      if (invalidChars.test(trimmedName)) {
+        showConfirm('错误', '文件名不能包含特殊字符', null);
+        return;
+      }
+
+      // 验证：名字长度限制（100字符）
+      if (trimmedName.length > 100) {
+        showConfirm('错误', '文件名不能超过100个字符', null);
+        return;
+      }
+
+      const fileName = trimmedName.endsWith('.md') ? trimmedName : trimmedName + '.md';
+
+      // 检查是否已存在（简单检查文件名部分）
+      const exists = await checkItemExists(currentWorkspace, fileName);
+      if (exists) {
+        showConfirm('错误', `"${fileName}" 已存在`, null);
+        return;
+      }
+
+      const result = await window.electronAPI.createItem(currentWorkspace, fileName, false);
+      if (result.success) {
+        await refreshFileTree();
+        await openFile(result.path);
+      } else {
+        showConfirm('错误', `创建文件失败：${result.error || '未知错误'}`, null);
       }
     });
   }
 
-  // Create new folder
+  /**
+   * 创建新文件夹
+   * 验证：非空、去除首尾空格、检查非法字符
+   */
   async function createNewFolder() {
-    if (!currentWorkspace) {
-      alert('请先选择工作区');
-      return;
-    }
-
     showDialog('新建文件夹', '', async name => {
-      if (name) {
-        const result = await window.electronAPI.createItem(currentWorkspace, name, true);
-        if (result.success) {
-          await refreshFileTree();
-        }
+      // 去除首尾空格
+      const trimmedName = name ? name.trim() : '';
+
+      // 验证：名字不能为空
+      if (!trimmedName) {
+        showConfirm('错误', '文件夹名不能为空', null);
+        return;
+      }
+
+      // 验证：不能包含非法字符
+      const invalidChars = /[<>:"/\\|?*\x00-\x1f]/;
+      if (invalidChars.test(trimmedName)) {
+        showConfirm('错误', '文件夹名不能包含特殊字符', null);
+        return;
+      }
+
+      // 验证：名字长度限制（100字符）
+      if (trimmedName.length > 100) {
+        showConfirm('错误', '文件夹名不能超过100个字符', null);
+        return;
+      }
+
+      // 检查是否已存在
+      const exists = await checkItemExists(currentWorkspace, trimmedName);
+      if (exists) {
+        showConfirm('错误', `"${trimmedName}" 已存在`, null);
+        return;
+      }
+
+      const result = await window.electronAPI.createItem(currentWorkspace, trimmedName, true);
+      if (result.success) {
+        await refreshFileTree();
+      } else {
+        showConfirm('错误', `创建文件夹失败：${result.error || '未知错误'}`, null);
       }
     });
   }
 
-  // Ensure assets folder exists
+  /**
+   * 检查工作区中是否已存在同名项
+   */
+  async function checkItemExists(parentPath, name) {
+    try {
+      const items = await window.electronAPI.readDirectory(parentPath);
+      return items.some(item => item.name === name);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /**
+   * 确保资源文件夹存在
+   */
   async function ensureAssetsFolder() {
     if (currentWorkspace) {
       try {
         await window.electronAPI.createDirectory(assetsFolderPath);
       } catch (e) {
-        // Folder might already exist
+        // 文件夹可能已存在
       }
     }
   }
 
-  // Start file watcher
+  // ========================================
+  // 文件监控和保存
+  // ========================================
+
+  /**
+   * 启动文件监控定时器
+   */
   function startFileWatcher() {
     if (fileWatcherInterval) clearInterval(fileWatcherInterval);
     fileWatcherInterval = setInterval(checkFileChanges, 2000);
   }
 
-  // Check for external file changes
+  /**
+   * 检测外部文件修改
+   */
   async function checkFileChanges() {
     if (!currentFilePath || isSaving) return;
 
@@ -236,17 +420,21 @@
         clearInterval(fileWatcherInterval);
       }
     } catch (e) {
-      // Ignore errors
+      // 忽略错误
     }
   }
 
-  // Show conflict dialog
+  /**
+   * 显示冲突对话框
+   */
   function showConflictDialog() {
     conflictMessage.textContent = `"${currentFileName}" 已被外部软件修改。请选择如何处理：`;
     conflictOverlay.classList.add('visible');
   }
 
-  // Handle conflict resolution
+  /**
+   * 处理冲突解决
+   */
   async function handleConflict(action) {
     conflictOverlay.classList.remove('visible');
 
@@ -255,7 +443,6 @@
         await saveCurrentFile();
         break;
       case 'keep':
-        // Keep local version, update modified time
         lastModifiedTime = Date.now();
         break;
       case 'reload':
@@ -266,7 +453,13 @@
     startFileWatcher();
   }
 
-  // Refresh File Tree
+  // ========================================
+  // 文件树管理
+  // ========================================
+
+  /**
+   * 刷新文件树
+   */
   async function refreshFileTree() {
     if (!currentWorkspace) return;
 
@@ -284,7 +477,9 @@
     });
   }
 
-  // Create Tree Item
+  /**
+   * 创建文件树节点
+   */
   function createTreeItem(item) {
     const div = document.createElement('div');
     div.className = 'tree-item';
@@ -305,6 +500,7 @@
 
     div.appendChild(content);
 
+    // 子节点
     if (item.isDirectory && item.children && item.children.length > 0) {
       const children = document.createElement('div');
       children.className = 'tree-children';
@@ -313,6 +509,7 @@
       });
       div.appendChild(children);
 
+      // 展开/折叠箭头
       content.querySelector('.tree-item-expand')?.addEventListener('click', e => {
         e.stopPropagation();
         const arrow = content.querySelector('.tree-item-expand');
@@ -324,26 +521,38 @@
     return div;
   }
 
-  // Handle Tree Item Click
+  /**
+   * 处理文件树项点击
+   */
   async function handleTreeItemClick(e, item) {
     if (item.isDirectory) return;
 
-    // Save current file first
+    // 保存当前文件
     if (currentFilePath && !isSaving) {
       await saveCurrentFile();
     }
 
-    // Update selection
+    // 更新选中状态
     document.querySelectorAll('.tree-item-content.selected').forEach(el => {
       el.classList.remove('selected');
     });
     e.currentTarget.classList.add('selected');
 
-    // Load file
+    // 加载文件
     await loadFile(item.path, item.name);
   }
 
-  // Load File
+  /**
+   * 打开文件
+   */
+  async function openFile(filePath) {
+    const fileName = filePath.split('/').pop();
+    await loadFile(filePath, fileName);
+  }
+
+  /**
+   * 加载文件内容
+   */
   async function loadFile(filePath, fileName) {
     currentFilePath = filePath;
     currentFileName = fileName;
@@ -358,11 +567,44 @@
     editor.innerHTML = markdownToHtml(content);
     editorPlaceholder.style.display = content ? 'none' : 'block';
 
+    // 同步侧边栏选中状态
+    syncSidebarSelection(filePath);
+
     updateOutline();
     updateStats();
   }
 
-  // Save Current File
+  /**
+   * 同步侧边栏选中状态
+   */
+  function syncSidebarSelection(filePath) {
+    // 清除之前的选中
+    document.querySelectorAll('.tree-item-content.selected').forEach(el => {
+      el.classList.remove('selected');
+    });
+
+    // 查找并选中当前文件
+    const treeItems = document.querySelectorAll('.tree-item');
+    treeItems.forEach(item => {
+      if (item.dataset.path === filePath) {
+        item.querySelector('.tree-item-content').classList.add('selected');
+        // 展开父文件夹
+        let parent = item.parentElement;
+        while (parent && parent.classList.contains('tree-children')) {
+          parent.classList.add('expanded');
+          const parentTreeItem = parent.parentElement;
+          if (parentTreeItem && parentTreeItem.querySelector('.tree-item-expand')) {
+            parentTreeItem.querySelector('.tree-item-expand').classList.add('expanded');
+          }
+          parent = parent.parentElement;
+        }
+      }
+    });
+  }
+
+  /**
+   * 保存当前文件
+   */
   async function saveCurrentFile() {
     if (!currentFilePath) return;
 
@@ -379,7 +621,9 @@
     isSaving = false;
   }
 
-  // Show Save Status
+  /**
+   * 显示保存状态
+   */
   function showSaveStatus() {
     saveStatus.textContent = '已保存';
     saveStatus.classList.add('visible');
@@ -388,18 +632,24 @@
     }, 2000);
   }
 
-  // Handle Editor Input
+  // ========================================
+  // 编辑器输入处理
+  // ========================================
+
+  /**
+   * 处理编辑器输入
+   */
   function handleEditorInput() {
     editorPlaceholder.style.display = editor.innerHTML ? 'none' : 'block';
     updateStats();
     updateOutline();
 
-    // Real-time preview
+    // 实时预览
     if (isPreviewMode) {
       renderPreview();
     }
 
-    // Auto-save with debounce
+    // 自动保存（防抖）
     if (saveTimeout) clearTimeout(saveTimeout);
     saveTimeout = setTimeout(() => {
       if (currentFilePath) {
@@ -408,12 +658,13 @@
     }, 1500);
   }
 
-  // Handle Editor Input (for slash command filtering)
+  /**
+   * 处理斜杠命令输入
+   */
   function handleEditorInputForSlash() {
     if (!slashPanelVisible) return;
 
     const text = getTextBeforeCursor();
-    // Extract filter text after the last /
     const slashIndex = text.lastIndexOf('/');
     if (slashIndex !== -1) {
       slashFilter = text.substring(slashIndex + 1);
@@ -421,7 +672,6 @@
       slashFilter = '';
     }
 
-    // If filter is empty or no match, reset selection
     const filtered = slashCommands.filter(cmd =>
       cmd.title.includes(slashFilter) || cmd.description.includes(slashFilter)
     );
@@ -435,68 +685,9 @@
     renderSlashList();
   }
 
-  // Execute menu command
-  function executeMenuCommand(cmd) {
-    const cmdMap = {
-      'h1': () => insertHeading(1),
-      'h2': () => insertHeading(2),
-      'h3': () => insertHeading(3),
-      'bold': () => wrapSelection('strong'),
-      'italic': () => wrapSelection('em'),
-      'underline': () => wrapSelection('u'),
-      'strikethrough': () => wrapSelection('s'),
-      'code': () => wrapSelection('code'),
-      'codeblock': () => insertCodeBlock(),
-      'link': () => insertLink(),
-      'image': () => insertImage(),
-      'ul': () => insertList('ul'),
-      'ol': () => insertList('ol'),
-      'todo': () => insertTodoList(),
-      'blockquote': () => insertBlockquote(),
-      'hr': () => insertHorizontalRule(),
-      'table': () => showTableDialog(),
-    };
-
-    if (cmdMap[cmd]) {
-      cmdMap[cmd]();
-    }
-  }
-
-  // Handle Editor Keydown
-  function handleEditorKeydown(e) {
-    // Handle slash command - show panel when / is pressed anywhere
-    if (e.key === '/' && !slashPanelVisible) {
-      e.preventDefault();
-      showSlashPanel();
-      return;
-    }
-
-    // Handle escape to hide slash panel
-    if (e.key === 'Escape' && slashPanelVisible) {
-      hideSlashPanel();
-    }
-
-    // Navigate slash panel
-    if (slashPanelVisible) {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        navigateSlashPanel(1);
-        return;
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        navigateSlashPanel(-1);
-        return;
-      }
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        executeSlashCommand();
-        return;
-      }
-    }
-  }
-
-  // Get text before cursor
+  /**
+   * 获取光标前的文本
+   */
   function getTextBeforeCursor() {
     const selection = window.getSelection();
     if (!selection.rangeCount) return '';
@@ -508,28 +699,32 @@
     return '';
   }
 
-  // Show Slash Panel
+  // ========================================
+  // 命令面板
+  // ========================================
+
+  /**
+   * 显示斜杠命令面板
+   */
   function showSlashPanel() {
     slashPanelVisible = true;
     slashSelectedIndex = 0;
     slashFilter = '';
     renderSlashList();
-    positionSlashPanel();
     slashPanel.classList.add('visible');
   }
 
-  // Hide Slash Panel
+  /**
+   * 隐藏斜杠命令面板
+   */
   function hideSlashPanel() {
     slashPanelVisible = false;
     slashPanel.classList.remove('visible');
   }
 
-  // Position Slash Panel (centered on screen)
-  function positionSlashPanel() {
-    // Panel is centered via CSS, no need to position via JS
-  }
-
-  // Render Slash List
+  /**
+   * 渲染斜杠命令列表
+   */
   function renderSlashList() {
     const filtered = slashCommands.filter(cmd =>
       cmd.title.includes(slashFilter) || cmd.description.includes(slashFilter)
@@ -559,16 +754,9 @@
     });
   }
 
-  // Navigate Slash Panel
-  function navigateSlashPanel(direction) {
-    const items = slashList.querySelectorAll('.slash-item');
-    if (items.length === 0) return;
-
-    slashSelectedIndex = Math.max(0, Math.min(items.length - 1, slashSelectedIndex + direction));
-    updateSlashSelection();
-  }
-
-  // Update Slash Selection
+  /**
+   * 更新斜杠命令选中状态
+   */
   function updateSlashSelection() {
     const items = slashList.querySelectorAll('.slash-item');
     items.forEach((item, index) => {
@@ -576,22 +764,24 @@
     });
   }
 
-  // Execute Slash Command
+  /**
+   * 执行斜杠命令
+   */
   function executeSlashCommand() {
     const filtered = slashCommands.filter(cmd =>
       cmd.title.includes(slashFilter) || cmd.description.includes(slashFilter)
     );
 
     if (filtered[slashSelectedIndex]) {
-      // Remove the slash character
       deleteSlashChar();
-
       hideSlashPanel();
       filtered[slashSelectedIndex].action();
     }
   }
 
-  // Delete slash character
+  /**
+   * 删除斜杠字符
+   */
   function deleteSlashChar() {
     const selection = window.getSelection();
     if (!selection.rangeCount) return;
@@ -599,7 +789,6 @@
     const range = selection.getRangeAt(0);
     const node = range.startContainer;
 
-    // Find and remove the slash character before cursor
     if (node.nodeType === Node.TEXT_NODE) {
       const text = node.textContent;
       const offset = range.startOffset;
@@ -614,149 +803,93 @@
     }
   }
 
-  // Insert Heading
-  function insertHeading(level) {
-    insertHTMLAtCursor(`<h${level}>标题</h${level}>`);
-  }
+  // ========================================
+  // 格式化操作
+  // ========================================
 
-  // Wrap Selection
-  function wrapSelection(tag) {
-    const selection = window.getSelection();
-    if (!selection.rangeCount) return;
+  /**
+   * 执行菜单命令
+   */
+  function executeMenuCommand(cmd) {
+    const cmdMap = {
+      'h1': () => insertHeading(1),
+      'h2': () => insertHeading(2),
+      'h3': () => insertHeading(3),
+      'bold': () => wrapSelection('strong'),
+      'italic': () => wrapSelection('em'),
+      'underline': () => wrapSelection('u'),
+      'strikethrough': () => wrapSelection('s'),
+      'code': () => wrapSelection('code'),
+      'codeblock': () => insertCodeBlock(),
+      'link': () => insertLink(),
+      'image': () => insertImage(),
+      'ul': () => insertList('ul'),
+      'ol': () => insertList('ol'),
+      'todo': () => insertTodoList(),
+      'blockquote': () => insertBlockquote(),
+      'hr': () => insertHorizontalRule(),
+      'table': () => showTableDialog(),
+    };
 
-    const range = selection.getRangeAt(0);
-    const selectedText = selection.toString();
-
-    if (selectedText) {
-      const wrapper = document.createElement(tag);
-      wrapper.textContent = selectedText;
-      range.deleteContents();
-      range.insertNode(wrapper);
-      range.selectNodeContents(wrapper);
-      range.collapse(false);
-      selection.removeAllRanges();
-      selection.addRange(range);
+    if (cmdMap[cmd]) {
+      cmdMap[cmd]();
     }
   }
 
-  // Insert Code Block
-  function insertCodeBlock() {
-    insertHTMLAtCursor('<pre class="code-block"><code></code></pre>');
-  }
-
-  // Insert Link
-  function insertLink() {
-    const selection = window.getSelection();
-    const selectedText = selection.toString() || '链接文本';
-    const html = `<a href="#" target="_blank">${selectedText}</a>`;
-    insertHTMLAtCursor(html);
-  }
-
-  // Insert Image
-  async function insertImage() {
-    if (!currentWorkspace) {
-      alert('请先打开工作区');
+  /**
+   * 处理编辑器按键
+   */
+  function handleEditorKeydown(e) {
+    // 显示斜杠命令面板
+    if (e.key === '/' && !slashPanelVisible) {
+      e.preventDefault();
+      showSlashPanel();
       return;
     }
 
-    try {
-      const result = await window.electronAPI.selectImage();
-      if (result && result.filePath) {
-        const relativePath = await saveImageToAssets(result.filePath);
-        const imageMd = `![${result.fileName}](${relativePath})`;
-        insertAtCursor(imageMd);
+    // ESC 关闭面板
+    if (e.key === 'Escape' && slashPanelVisible) {
+      hideSlashPanel();
+    }
+
+    // 导航斜杠面板
+    if (slashPanelVisible) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        navigateSlashPanel(1);
+        return;
       }
-    } catch (e) {
-      console.error('Insert image error:', e);
-    }
-  }
-
-  // Save image to assets folder
-  async function saveImageToAssets(imagePath) {
-    const fileName = generateImageFileName(imagePath);
-    const destPath = assetsFolderPath + '/' + fileName;
-    await window.electronAPI.copyFile(imagePath, destPath);
-    return '.flowmark-assets/' + fileName;
-  }
-
-  // Generate unique image filename
-  function generateImageFileName(originalPath) {
-    const ext = originalPath.split('.').pop() || 'png';
-    const timestamp = Date.now();
-    const hash = Math.random().toString(36).substring(2, 8);
-    return `image-${timestamp}-${hash}.${ext}`;
-  }
-
-  // Show Table Dialog
-  function showTableDialog() {
-    document.getElementById('table-rows').value = 3;
-    document.getElementById('table-cols').value = 3;
-    tableDialogOverlay.classList.add('visible');
-  }
-
-  // Hide Table Dialog
-  function hideTableDialog() {
-    tableDialogOverlay.classList.remove('visible');
-  }
-
-  // Insert Table from Dialog
-  function insertTableFromDialog() {
-    const rows = parseInt(document.getElementById('table-rows').value) || 3;
-    const cols = parseInt(document.getElementById('table-cols').value) || 3;
-    hideTableDialog();
-
-    // Ensure editor is focused before inserting
-    editor.focus();
-
-    // Check if there's a valid selection, if not place cursor at end
-    const selection = window.getSelection();
-    if (!selection.rangeCount) {
-      // Place cursor at end of editor
-      const range = document.createRange();
-      range.selectNodeContents(editor);
-      range.collapse(false);
-      selection.removeAllRanges();
-      selection.addRange(range);
-    }
-
-    insertTable(rows, cols);
-  }
-
-  // Insert Table
-  function insertTable(rows, cols) {
-    let html = '<table class="md-table">';
-
-    // Header row with column numbers
-    html += '<thead><tr>';
-    for (let i = 0; i < cols; i++) {
-      const label = '列' + (i + 1);
-      const attrs = ' data-label="' + label + '"';
-      html += '<th' + attrs + '>' + label + '</th>';
-    }
-    html += '</tr></thead>';
-
-    // Body rows with row numbers in first column
-    html += '<tbody>';
-    for (let i = 0; i < rows - 1; i++) {
-      html += '<tr>';
-      for (let j = 0; j < cols; j++) {
-        const label = j === 0 ? '行' + (i + 1) : '';
-        const attrs = label ? ' data-label="' + label + '"' : '';
-        html += '<td' + attrs + '>' + label + '</td>';
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        navigateSlashPanel(-1);
+        return;
       }
-      html += '</tr>';
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        executeSlashCommand();
+        return;
+      }
     }
-    html += '</tbody></table>';
-
-    insertHTMLAtCursor(html);
   }
 
-  // Insert HTML at cursor
+  /**
+   * 导航斜杠面板
+   */
+  function navigateSlashPanel(direction) {
+    const items = slashList.querySelectorAll('.slash-item');
+    if (items.length === 0) return;
+
+    slashSelectedIndex = Math.max(0, Math.min(items.length - 1, slashSelectedIndex + direction));
+    updateSlashSelection();
+  }
+
+  /**
+   * 在光标位置插入 HTML
+   */
   function insertHTMLAtCursor(html) {
     editor.focus();
     const selection = window.getSelection();
     if (!selection.rangeCount) {
-      // Place cursor at end if no selection
       const range = document.createRange();
       range.selectNodeContents(editor);
       range.collapse(false);
@@ -767,7 +900,6 @@
     const range = selection.getRangeAt(0);
     range.collapse(true);
 
-    // Create a temporary container
     const container = document.createElement('div');
     container.innerHTML = html;
     const fragment = document.createDocumentFragment();
@@ -778,7 +910,7 @@
 
     range.insertNode(fragment);
 
-    // Move cursor after the inserted content
+    // 移动光标到插入内容之后
     const lastNode = fragment.lastChild;
     if (lastNode) {
       range.setStartAfter(lastNode);
@@ -790,50 +922,255 @@
     handleEditorInput();
   }
 
-  // Insert List
+  /**
+   * 插入标题
+   */
+  function insertHeading(level) {
+    insertHTMLAtCursor(`<h${level}>标题</h${level}>`);
+  }
+
+  /**
+   * 包裹选中文本
+   */
+  function wrapSelection(tag) {
+    const selection = window.getSelection();
+    if (!selection.rangeCount) return;
+
+    const selectedText = selection.toString();
+
+    if (selectedText) {
+      // 保存选区
+      const savedRanges = [];
+      for (let i = 0; i < selection.rangeCount; i++) {
+        savedRanges.push(selection.getRangeAt(i).cloneRange());
+      }
+
+      // 恢复选区
+      selection.removeAllRanges();
+      savedRanges.forEach(r => selection.addRange(r));
+
+      // 使用浏览器原生命令
+      switch (tag) {
+        case 'strong':
+          document.execCommand('bold', false, null);
+          break;
+        case 'em':
+          document.execCommand('italic', false, null);
+          break;
+        case 'u':
+          document.execCommand('underline', false, null);
+          break;
+        case 's':
+          document.execCommand('strikeThrough', false, null);
+          break;
+        default: {
+          const range = selection.getRangeAt(0);
+          const wrapper = document.createElement(tag);
+          wrapper.textContent = selectedText;
+          range.deleteContents();
+          range.insertNode(wrapper);
+          range.setStartAfter(wrapper);
+          range.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+      }
+    } else {
+      // 无选区，插入空标签
+      editor.focus();
+      const wrapper = document.createElement(tag);
+      wrapper.innerHTML = ' ';
+      insertHTMLAtCursor(wrapper.outerHTML);
+    }
+
+    editor.focus();
+    handleEditorInput();
+  }
+
+  /**
+   * 插入代码块
+   */
+  function insertCodeBlock() {
+    editor.focus();
+    const selection = window.getSelection();
+    if (selection.rangeCount === 0) {
+      const range = document.createRange();
+      range.selectNodeContents(editor);
+      range.collapse(false);
+      selection.addRange(range);
+    }
+    insertHTMLAtCursor('<pre class="code-block"><code></code></pre>');
+  }
+
+  /**
+   * 插入链接
+   */
+  function insertLink() {
+    editor.focus();
+    const selection = window.getSelection();
+    const selectedText = selection.toString() || '链接文本';
+
+    let savedRange = null;
+    if (selection.rangeCount > 0) {
+      savedRange = selection.getRangeAt(0).cloneRange();
+    }
+
+    const url = prompt('请输入链接地址：', 'https://');
+
+    if (savedRange) {
+      selection.removeAllRanges();
+      selection.addRange(savedRange);
+    }
+
+    if (url) {
+      const html = `<a href="${url}" target="_blank">${selectedText}</a>`;
+      insertHTMLAtCursor(html);
+    }
+  }
+
+  /**
+   * 插入图片
+   */
+  async function insertImage() {
+    if (!currentWorkspace) {
+      alert('请先打开工作区');
+      return;
+    }
+
+    try {
+      const result = await window.electronAPI.selectImage();
+      if (result && result.filePath) {
+        const relativePath = await saveImageToAssets(result.filePath);
+        const html = `<img src="${relativePath}" alt="${result.fileName}" class="md-image">`;
+        editor.focus();
+        insertHTMLAtCursor(html);
+      }
+    } catch (e) {
+      console.error('Insert image error:', e);
+      alert('插入图片失败');
+    }
+  }
+
+  /**
+   * 保存图片到资源文件夹
+   */
+  async function saveImageToAssets(imagePath) {
+    const fileName = generateImageFileName(imagePath);
+    const destPath = assetsFolderPath + '/' + fileName;
+    await window.electronAPI.copyFile(imagePath, destPath);
+    return '.flowmark-assets/' + fileName;
+  }
+
+  /**
+   * 生成唯一图片文件名
+   */
+  function generateImageFileName(originalPath) {
+    const ext = originalPath.split('.').pop() || 'png';
+    const timestamp = Date.now();
+    const hash = Math.random().toString(36).substring(2, 8);
+    return `image-${timestamp}-${hash}.${ext}`;
+  }
+
+  /**
+   * 显示表格对话框
+   */
+  function showTableDialog() {
+    document.getElementById('table-rows').value = 3;
+    document.getElementById('table-cols').value = 3;
+    tableDialogOverlay.classList.add('visible');
+  }
+
+  /**
+   * 隐藏表格对话框
+   */
+  function hideTableDialog() {
+    tableDialogOverlay.classList.remove('visible');
+  }
+
+  /**
+   * 从对话框插入表格
+   */
+  function insertTableFromDialog() {
+    const rows = parseInt(document.getElementById('table-rows').value) || 3;
+    const cols = parseInt(document.getElementById('table-cols').value) || 3;
+    hideTableDialog();
+
+    editor.focus();
+    const selection = window.getSelection();
+    if (!selection.rangeCount) {
+      const range = document.createRange();
+      range.selectNodeContents(editor);
+      range.collapse(false);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+
+    insertTable(rows, cols);
+  }
+
+  /**
+   * 插入表格 HTML
+   */
+  function insertTable(rows, cols) {
+    let html = '<table class="md-table">';
+
+    // 表头
+    html += '<thead><tr>';
+    for (let i = 0; i < cols; i++) {
+      html += `<th data-label="列${i + 1}">列${i + 1}</th>`;
+    }
+    html += '</tr></thead>';
+
+    // 表体
+    html += '<tbody>';
+    for (let i = 0; i < rows - 1; i++) {
+      html += '<tr>';
+      for (let j = 0; j < cols; j++) {
+        const label = j === 0 ? `行${i + 1}` : '';
+        html += `<td data-label="${label}">${label}</td>`;
+      }
+      html += '</tr>';
+    }
+    html += '</tbody></table>';
+
+    insertHTMLAtCursor(html);
+  }
+
+  /**
+   * 插入列表
+   */
   function insertList(type) {
     const tag = type === 'ul' ? 'ul' : 'ol';
     const html = `<${tag}><li></li></${tag}>`;
     insertHTMLAtCursor(html);
   }
 
-  // Insert Todo List
+  /**
+   * 插入待办清单
+   */
   function insertTodoList() {
     const html = '<ul class="task-list"><li class="task-item"><input type="checkbox"> 待办事项</li></ul>';
     insertHTMLAtCursor(html);
   }
 
-  // Insert Blockquote
+  /**
+   * 插入引用块
+   */
   function insertBlockquote() {
     insertHTMLAtCursor('<blockquote></blockquote>');
   }
 
-  // Insert Horizontal Rule
+  /**
+   * 插入水平分割线
+   */
   function insertHorizontalRule() {
     insertHTMLAtCursor('<hr>');
   }
 
-  // Insert at Cursor
-  function insertAtCursor(text) {
-    const selection = window.getSelection();
-    if (!selection.rangeCount) return;
-
-    const range = selection.getRangeAt(0);
-    const node = document.createTextNode(text);
-    range.insertNode(node);
-
-    range.setStartAfter(node);
-    range.collapse(true);
-    selection.removeAllRanges();
-    selection.addRange(range);
-
-    editor.focus();
-    handleEditorInput();
-  }
-
-  // Handle Paste
+  /**
+   * 处理粘贴事件
+   */
   async function handlePaste(e) {
-    // Check for image in clipboard
     const items = e.clipboardData?.items;
     if (!items) return;
 
@@ -849,7 +1186,9 @@
     }
   }
 
-  // Paste Image
+  /**
+   * 粘贴图片
+   */
   async function pasteImage(file) {
     if (!currentWorkspace) {
       alert('请先打开工作区');
@@ -864,16 +1203,14 @@
       const ext = file.name?.split('.').pop() || 'png';
       const fileName = `paste-${timestamp}-${hash}.${ext}`;
 
-      // Convert file to base64
       const arrayBuffer = await file.arrayBuffer();
       const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
 
-      // Use the correct API signature: (dir, name, base64Data)
       await window.electronAPI.writeImageFile(assetsFolderPath, fileName, base64);
       const relativePath = '.flowmark-assets/' + fileName;
-      const imageMd = `![](${relativePath})`;
+      const html = `<img src="${relativePath}" alt="${fileName}" class="md-image">`;
 
-      insertAtCursor(imageMd);
+      insertHTMLAtCursor(html);
     } catch (e) {
       console.error('Paste image error:', e);
     }
@@ -881,7 +1218,9 @@
     hideImageProgress();
   }
 
-  // Show/Hide Image Progress
+  /**
+   * 显示/隐藏图片插入进度
+   */
   function showImageProgress() {
     imageProgress.classList.add('visible');
   }
@@ -890,7 +1229,9 @@
     imageProgress.classList.remove('visible');
   }
 
-  // Handle Drag Over
+  /**
+   * 处理拖拽事件
+   */
   function handleDragOver(e) {
     if (e.dataTransfer?.types?.includes('Files')) {
       e.preventDefault();
@@ -898,7 +1239,9 @@
     }
   }
 
-  // Handle Drop
+  /**
+   * 处理文件放下
+   */
   async function handleDrop(e) {
     const files = e.dataTransfer?.files;
     if (!files || files.length === 0) return;
@@ -912,22 +1255,24 @@
     }
   }
 
-  // Handle Editor Keyup
+  /**
+   * 处理键盘抬起
+   */
   function handleEditorKeyup(e) {
-    // Handle markdown shortcuts
     const text = getTextBeforeCursor();
     if (!text) return;
 
     const lines = text.split('\n');
     const currentLine = lines[lines.length - 1];
-
-    // Check for heading shortcuts
+    // 检查标题快捷方式
     if (currentLine === '#' && !e.shiftKey) {
-      // Will be handled by slash command if user continues
+      // 等待更多输入
     }
   }
 
-  // Handle Selection Change (Show Toolbar)
+  /**
+   * 处理选择变化
+   */
   function handleSelectionChange() {
     const selection = window.getSelection();
     const selectedText = selection.toString().trim();
@@ -939,7 +1284,9 @@
     }
   }
 
-  // Show Format Toolbar
+  /**
+   * 显示格式工具栏
+   */
   function showFormatToolbar() {
     const selection = window.getSelection();
     if (!selection.rangeCount) return;
@@ -954,12 +1301,16 @@
     updateToolbarActiveStates();
   }
 
-  // Hide Format Toolbar
+  /**
+   * 隐藏格式工具栏
+   */
   function hideFormatToolbar() {
     formatToolbar.classList.remove('visible');
   }
 
-  // Update Toolbar Active States
+  /**
+   * 更新工具栏激活状态
+   */
   function updateToolbarActiveStates() {
     const btn = (format) => formatToolbar.querySelector(`[data-format="${format}"]`);
 
@@ -968,7 +1319,9 @@
     btn('underline')?.classList.toggle('active', document.queryCommandState('underline'));
   }
 
-  // Handle Format
+  /**
+   * 处理格式化
+   */
   function handleFormat(format) {
     const selection = window.getSelection();
     if (!selection.rangeCount) return;
@@ -990,7 +1343,7 @@
         insertLink();
         break;
       case 'code':
-        wrapSelection('`', '`');
+        wrapSelection('code');
         break;
     }
 
@@ -999,7 +1352,13 @@
     updateToolbarActiveStates();
   }
 
-  // Global Keyboard Shortcuts
+  // ========================================
+  // 全局快捷键
+  // ========================================
+
+  /**
+   * 处理全局键盘事件
+   */
   function handleGlobalKeydown(e) {
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
     const cmdKey = isMac ? e.metaKey : e.ctrlKey;
@@ -1038,11 +1397,30 @@
           e.preventDefault();
           togglePreview();
           break;
+        case 'o':
+          e.preventDefault();
+          openWorkspace();
+          break;
+        case 'n':
+          e.preventDefault();
+          createNewFile();
+          break;
       }
+    }
+
+    // ESC 关闭命令面板
+    if (e.key === 'Escape' && slashPanelVisible) {
+      hideSlashPanel();
     }
   }
 
-  // Toggle Preview Mode
+  // ========================================
+  // 预览和大纲
+  // ========================================
+
+  /**
+   * 切换预览模式
+   */
   function togglePreview() {
     isPreviewMode = !isPreviewMode;
 
@@ -1056,18 +1434,19 @@
     }
   }
 
-  // Render Preview
+  /**
+   * 渲染预览
+   */
   function renderPreview() {
-    // Simply copy editor content to preview (already in HTML format)
-    // Clone the editor content to avoid moving elements
     const clone = editor.cloneNode(true);
-    // Remove placeholder from clone
     const placeholder = clone.querySelector('.editor-placeholder');
     if (placeholder) placeholder.remove();
     previewContent.innerHTML = clone.innerHTML;
   }
 
-  // Update Outline
+  /**
+   * 更新大纲目录
+   */
   function updateOutline() {
     const headings = editor.querySelectorAll('h1, h2, h3');
     outlineList.innerHTML = '';
@@ -1094,14 +1473,15 @@
     });
   }
 
-  // Update Stats
+  /**
+   * 更新统计信息
+   */
   function updateStats() {
     const text = editor.innerText || '';
     const chars = text.replace(/\s/g, '').length;
-    const words = text.trim() ? text.trim().split(/\s+/).length : 0;
     wordCount.textContent = `${chars} 字`;
 
-    // Calculate line number
+    // 计算行号
     const content = editor.innerHTML;
     const lineBreaks = (content.match(/<br\s*\/?>/gi) || []).length;
     const paragraphs = (content.match(/<\/(p|h\d|blockquote|li|div)>/gi) || []).length;
@@ -1109,7 +1489,13 @@
     lineInfo.textContent = `行 ${currentLine || 1}`;
   }
 
-  // Context Menu
+  // ========================================
+  // 上下文菜单
+  // ========================================
+
+  /**
+   * 显示上下文菜单
+   */
   function showContextMenu(e, item) {
     e.preventDefault();
     e.stopPropagation();
@@ -1121,13 +1507,18 @@
     contextMenu.classList.add('visible');
   }
 
+  /**
+   * 隐藏上下文菜单
+   */
   function hideContextMenu() {
     contextMenu.classList.remove('visible');
     contextMenuTarget = null;
   }
 
-  // Handle Context Menu Action
-  function handleContextMenuAction(action) {
+  /**
+   * 处理上下文菜单操作
+   */
+  async function handleContextMenuAction(action) {
     if (!contextMenuTarget) return;
 
     const item = contextMenuTarget;
@@ -1163,7 +1554,6 @@
         showDialog('重命名', item.name, async newName => {
           if (newName && newName !== item.name) {
             const dir = item.path.substring(0, item.path.lastIndexOf('/'));
-            const newPath = dir + '/' + newName;
             if (!item.isDirectory && !newName.endsWith('.md')) {
               await window.electronAPI.renameItem(item.path, newName + '.md');
             } else {
@@ -1189,9 +1579,15 @@
     }
   }
 
-  // Dialog
+  // ========================================
+  // 对话框
+  // ========================================
+
   let dialogCallback = null;
 
+  /**
+   * 显示输入对话框
+   */
   function showDialog(title, defaultValue, callback) {
     dialogTitle.textContent = title;
     dialogInput.value = defaultValue;
@@ -1200,11 +1596,17 @@
     setTimeout(() => dialogInput.focus(), 50);
   }
 
+  /**
+   * 隐藏对话框
+   */
   function hideDialog() {
     dialogOverlay.classList.remove('visible');
     dialogCallback = null;
   }
 
+  /**
+   * 确认对话框输入
+   */
   function confirmDialog() {
     if (dialogCallback) {
       dialogCallback(dialogInput.value);
@@ -1212,9 +1614,11 @@
     hideDialog();
   }
 
-  // Confirm Dialog
   let confirmCallback = null;
 
+  /**
+   * 显示确认对话框
+   */
   function showConfirm(title, message, callback) {
     confirmTitle.textContent = title;
     confirmMessage.textContent = message;
@@ -1222,117 +1626,128 @@
     confirmOverlay.classList.add('visible');
   }
 
+  /**
+   * 隐藏确认对话框
+   */
   function hideConfirm() {
     confirmOverlay.classList.remove('visible');
     confirmCallback = null;
   }
 
-  // Markdown to HTML conversion
+  // ========================================
+  // Markdown 转换
+  // ========================================
+
+  /**
+   * Markdown 转 HTML
+   */
   function markdownToHtml(md) {
     if (!md) return '';
 
     let html = md;
 
-    // Preserve existing HTML elements before escaping
+    // 保护现有 HTML 元素
     const placeholders = [];
     let idx = 0;
 
-    // Protect tables
+    // 保护表格
     html = html.replace(/<table[^>]*>[\s\S]*?<\/table>/gi, (match) => {
       placeholders.push(match);
       return `__PH_${idx++}__`;
     });
 
-    // Protect code blocks
+    // 保护代码块
     html = html.replace(/<pre class="code-block">[\s\S]*?<\/pre>/gi, (match) => {
       placeholders.push(match);
       return `__PH_${idx++}__`;
     });
 
-    // Protect task lists
+    // 保护任务列表
     html = html.replace(/<ul class="task-list">[\s\S]*?<\/ul>/gi, (match) => {
       placeholders.push(match);
       return `__PH_${idx++}__`;
     });
 
-    // Escape HTML
+    // HTML 转义
     html = html.replace(/&/g, '&amp;')
                .replace(/</g, '&lt;')
                .replace(/>/g, '&gt;');
 
-    // Restore placeholders and unescape
+    // 恢复占位符
     placeholders.forEach((content, i) => {
       const unescaped = content.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
       html = html.replace(`__PH_${i}__`, unescaped);
     });
 
-    // Code blocks
+    // 代码块
     html = html.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre class="code-block"><code>$2</code></pre>');
 
-    // Tables
+    // 表格
     html = parseMarkdownTable(html);
 
-    // Task lists
+    // 任务列表
     html = html.replace(/^- \[ \] (.+)$/gm, '<div class="task-item"><input type="checkbox" disabled> $1</div>');
     html = html.replace(/^- \[x\] (.+)$/gm, '<div class="task-item"><input type="checkbox" checked disabled> $1</div>');
 
-    // Inline code
+    // 行内代码
     html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
 
-    // Headers
+    // 标题
     html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
     html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
     html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
     html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
 
-    // Bold
+    // 粗体
     html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
     html = html.replace(/__([^_]+)__/g, '<strong>$1</strong>');
 
-    // Italic
+    // 斜体
     html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
     html = html.replace(/_([^_]+)_/g, '<em>$1</em>');
 
-    // Strikethrough
+    // 删除线
     html = html.replace(/~~([^~]+)~~/g, '<s>$1</s>');
 
-    // Links
+    // 链接
     html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
 
-    // Images with relative paths
+    // 图片
     html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" class="md-image">');
 
-    // Horizontal rules
+    // 水平线
     html = html.replace(/^---$/gm, '<hr>');
     html = html.replace(/^\*\*\*$/gm, '<hr>');
     html = html.replace(/^___$/gm, '<hr>');
 
-    // Blockquotes
+    // 引用
     html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
 
-    // Unordered lists
+    // 无序列表
     html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
     html = consolidateLists(html, 'ul');
 
-    // Ordered lists
+    // 有序列表
     html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
     html = consolidateLists(html, 'ol');
 
-    // Paragraphs
+    // 段落
     html = html.split('\n\n').map(p => {
       if (p.match(/^<(h[1-6]|blockquote|pre|ul|ol|li|hr|div)/i)) return p;
       if (p.trim()) return `<p>${p.replace(/\n/g, '<br>')}</p>`;
       return '';
     }).join('');
 
-    // Clean up
+    // 清理
     html = html.replace(/<p><\/p>/g, '');
     html = html.replace(/<br><br>/g, '<br>');
 
     return html;
   }
 
-  // Parse markdown table to HTML
+  /**
+   * 解析 Markdown 表格
+   */
   function parseMarkdownTable(html) {
     const tableRegex = /\|(.+)\|\n\|[:\- ]+\|\n((?:\|.+\|\n?)+)/g;
     return html.replace(tableRegex, (match, header, body) => {
@@ -1345,10 +1760,12 @@
     });
   }
 
-  // Consolidate list items into ul/ol
+  /**
+   * 合并列表项
+   */
   function consolidateLists(html, type) {
     const tag = type === 'ul' ? 'ul' : 'ol';
-    const regex = type === 'ul' ? /<li>.+<\/li>/g : /<li>.+<\/li>/g;
+    const regex = /<li>.+<\/li>/g;
     const matches = html.match(regex) || [];
     if (matches.length === 0) return html;
 
@@ -1376,13 +1793,15 @@
     return result;
   }
 
-  // HTML to Markdown conversion
+  /**
+   * HTML 转 Markdown
+   */
   function htmlToMarkdown(html) {
     if (!html) return '';
 
     let md = html;
 
-    // Tables
+    // 表格
     md = md.replace(/<table[^>]*>([\s\S]*?)<\/table>/gi, (match, content) => {
       const rows = content.match(/<tr[^>]*>([\s\S]*?)<\/tr>/gi) || [];
       return rows.map(row => {
@@ -1392,73 +1811,75 @@
     });
     md = md.replace(/\|---/g, '|---');
 
-    // Task lists
+    // 任务列表
     md = md.replace(/<div class="task-item"><input[^>]*>\s*([^<]+)<\/div>/gi, (match, text) => {
       const checked = match.includes('checked');
       return `- [${checked ? 'x' : ' '}] ${text.trim()}`;
     });
 
-    // Code blocks
+    // 代码块
     md = md.replace(/<pre class="code-block"><code>([\s\S]*?)<\/code><\/pre>/g, '```\n$1```');
 
-    // Inline code
+    // 行内代码
     md = md.replace(/<code>([^<]+)<\/code>/g, '`$1`');
 
-    // Headers
+    // 标题
     md = md.replace(/<h1[^>]*>([^<]+)<\/h1>/gi, '# $1\n');
     md = md.replace(/<h2[^>]*>([^<]+)<\/h2>/gi, '## $1\n');
     md = md.replace(/<h3[^>]*>([^<]+)<\/h3>/gi, '### $1\n');
     md = md.replace(/<h4[^>]*>([^<]+)<\/h4>/gi, '#### $1\n');
 
-    // Bold
+    // 粗体
     md = md.replace(/<strong>([^<]+)<\/strong>/g, '**$1**');
 
-    // Italic
+    // 斜体
     md = md.replace(/<em>([^<]+)<\/em>/g, '*$1*');
 
-    // Strikethrough
+    // 删除线
     md = md.replace(/<s>([^<]+)<\/s>/g, '~~$1~~');
 
-    // Links
+    // 链接
     md = md.replace(/<a[^>]+href="([^"]+)"[^>]*>([^<]+)<\/a>/g, '[$2]($1)');
 
-    // Images
+    // 图片
     md = md.replace(/<img[^>]+src="([^"]+)"[^>]*alt="([^"]*)"[^>]*>/g, '![$2]($1)');
     md = md.replace(/<img[^>]+alt="([^"]*)"[^>]*src="([^"]+)"[^>]*>/g, '![$1]($2)');
     md = md.replace(/<img[^>]+src="([^"]+)"[^>]*>/g, '![]($1)');
 
-    // Horizontal rules
+    // 水平线
     md = md.replace(/<hr\s*\/?>/gi, '---\n');
 
-    // Blockquotes
+    // 引用
     md = md.replace(/<blockquote>([^<]+)<\/blockquote>/gi, '> $1\n');
 
-    // Line breaks
+    // 换行
     md = md.replace(/<br\s*\/?>/gi, '\n');
 
-    // Paragraphs
+    // 段落
     md = md.replace(/<\/p><p>/gi, '\n\n');
     md = md.replace(/<p>([^<]*)<\/p>/gi, '$1\n\n');
 
-    // Lists
+    // 列表
     md = md.replace(/<\/?ul>|<\/?ol>/gi, '');
     md = md.replace(/<li>([^<]+)<\/li>/gi, '- $1\n');
 
-    // Remove remaining tags
+    // 移除剩余标签
     md = md.replace(/<[^>]+>/g, '');
 
-    // Decode HTML entities
+    // HTML 实体解码
     md = md.replace(/&amp;/g, '&')
            .replace(/&lt;/g, '<')
            .replace(/&gt;/g, '>');
 
-    // Clean up
+    // 清理
     md = md.replace(/\n{3,}/g, '\n\n');
     md = md.trim();
 
     return md;
   }
 
-  // Start the app
+  // ========================================
+  // 启动应用
+  // ========================================
   init();
 })();
