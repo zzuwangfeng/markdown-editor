@@ -89,10 +89,24 @@
         <span class="save-status" id="save-status"></span>
       </div>
       <div class="editor-split">
-        <div class="editor-content" id="editor" contenteditable="true" spellcheck="false">
-          <div class="editor-placeholder" id="editor-placeholder">开始输入，或按 / 唤起命令...</div>
+        <!-- 无文件选中时的欢迎界面 -->
+        <div class="editor-welcome" id="editor-welcome">
+          <div class="welcome-icon">
+            <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+              <rect width="64" height="64" rx="12" fill="var(--accent-light)"/>
+              <path d="M16 20h32M16 32h24M16 44h28" stroke="var(--accent)" stroke-width="3" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <h2 class="welcome-title">FlowMark Editor</h2>
+          <p class="welcome-desc">从左侧选择一个 Markdown 文件开始编辑</p>
         </div>
-        <div class="preview-content" id="preview-content"></div>
+        <!-- 编辑器区域 -->
+        <div class="editor-content-wrapper" id="editor-wrapper" style="display: none;">
+          <div class="editor-content" id="editor" contenteditable="true" spellcheck="false">
+            <div class="editor-placeholder" id="editor-placeholder">开始输入，或按 / 唤起命令...</div>
+          </div>
+          <div class="preview-content" id="preview-content"></div>
+        </div>
       </div>
       <div class="editor-footer">
         <span class="word-count" id="word-count">0 字</span>

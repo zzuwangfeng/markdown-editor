@@ -393,6 +393,54 @@ body {
   flex: 1;
   display: flex;
   overflow: hidden;
+  position: relative;
+}
+
+/* 无文件选中时的欢迎界面 */
+.editor-welcome {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-primary);
+  z-index: 1;
+}
+
+.editor-welcome.hidden {
+  display: none;
+}
+
+.welcome-icon {
+  margin-bottom: 20px;
+}
+
+.welcome-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 12px;
+}
+
+.welcome-desc {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* 编辑器区域包装 */
+.editor-content-wrapper {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.editor-content-wrapper.hidden {
+  display: none;
 }
 
 .editor-content {

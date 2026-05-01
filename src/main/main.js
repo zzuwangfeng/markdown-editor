@@ -126,6 +126,11 @@ ipcMain.handle('read-directory', async (event, dirPath) => {
   try {
     const items = await fs.promises.readdir(dirPath, { withFileTypes: true });
     const result = await Promise.all(items.map(async (item) => {
+      // 跳过隐藏文件（以 . 开头的文件/文件夹）
+      if (item.name.startsWith('.')) {
+        return null;
+      }
+
       const fullPath = path.join(dirPath, item.name);
       const isDirectory = item.isDirectory();
       const name = item.name;
@@ -140,6 +145,8 @@ ipcMain.handle('read-directory', async (event, dirPath) => {
           const subItems = await fs.promises.readdir(fullPath, { withFileTypes: true });
           children = subItems
             .filter(subItem => {
+              // 跳过隐藏文件
+              if (subItem.name.startsWith('.')) return false;
               if (subItem.isDirectory()) return true;
               return subItem.name.endsWith('.md');
             })

@@ -26,6 +26,7 @@
   // ========================================
   let sidebar, fileTree, emptyState, workspaceName;
   let btnAdd, dropdownMenu, editor, editorPlaceholder;
+  let editorWrapper, editorWelcome;
   let currentFileNameEl, saveStatus, wordCount, lineInfo;
   let outlineList, contextMenu, formatToolbar;
   let slashPanel, slashList;
@@ -101,6 +102,8 @@
     dropdownMenu = document.getElementById('dropdown-menu');
     editor = document.getElementById('editor');
     editorPlaceholder = document.getElementById('editor-placeholder');
+    editorWrapper = document.getElementById('editor-wrapper');
+    editorWelcome = document.getElementById('editor-welcome');
     currentFileNameEl = document.getElementById('current-file-name');
     saveStatus = document.getElementById('save-status');
     wordCount = document.getElementById('word-count');
@@ -138,6 +141,10 @@
     // 默认启用预览模式
     btnPreview.classList.add('active');
     isPreviewMode = true;
+
+    // 初始化编辑器状态（未选中文件）
+    updateEditorVisibility();
+    disableEditor();
   }
 
   // ========================================
@@ -308,6 +315,24 @@
     } else {
       document.documentElement.setAttribute('data-theme', theme);
     }
+  }
+
+  /**
+   * 禁用编辑器（未选中文件时）
+   */
+  function disableEditor() {
+    editor.contentEditable = 'false';
+    editor.style.opacity = '0.5';
+    editor.style.pointerEvents = 'none';
+  }
+
+  /**
+   * 启用编辑器（选中文件后）
+   */
+  function enableEditor() {
+    editor.contentEditable = 'true';
+    editor.style.opacity = '1';
+    editor.style.pointerEvents = 'auto';
   }
 
   // ========================================
@@ -704,6 +729,13 @@
     const stat = await window.electronAPI.getFileStat(filePath);
     lastModifiedTime = stat ? stat.mtime : Date.now();
 
+    // 显示编辑器区域，隐藏欢迎界面
+    editorWelcome.classList.add('hidden');
+    editorWrapper.style.display = 'flex';
+
+    // 启用编辑器
+    enableEditor();
+
     editor.innerHTML = markdownToHtml(content);
     editorPlaceholder.style.display = content ? 'none' : 'block';
 
@@ -712,6 +744,19 @@
 
     updateOutline();
     updateStats();
+  }
+
+  /**
+   * 更新界面状态（欢迎页/编辑器）
+   */
+  function updateEditorVisibility() {
+    if (currentFilePath) {
+      editorWelcome.classList.add('hidden');
+      editorWrapper.style.display = 'flex';
+    } else {
+      editorWelcome.classList.remove('hidden');
+      editorWrapper.style.display = 'none';
+    }
   }
 
   /**
