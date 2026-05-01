@@ -45,7 +45,13 @@ function createMenu() {
       submenu: [
         { label: '关于 FlowMark', role: 'about' },
         { type: 'separator' },
-        { label: '偏好设置', accelerator: 'Cmd+,', click: () => mainWindow.webContents.send('menu-event', 'settings') },
+        {
+          label: '主题',
+          submenu: [
+            { label: '浅色', click: () => mainWindow.webContents.send('menu-event', 'theme-light') },
+            { label: '深色', click: () => mainWindow.webContents.send('menu-event', 'theme-dark') }
+          ]
+        },
         { type: 'separator' },
         { label: '退出', accelerator: 'Cmd+Q', role: 'quit' }
       ]

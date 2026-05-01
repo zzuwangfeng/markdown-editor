@@ -119,6 +119,7 @@ body {
 .sidebar-actions {
   display: flex;
   gap: 4px;
+  align-items: center;
 }
 
 .add-dropdown {
@@ -497,7 +498,6 @@ body {
   font-size: 15px;
   line-height: 1.7;
   color: var(--text-primary);
-  border-right: 1px solid var(--border-color);
 }
 
 .editor-content table {

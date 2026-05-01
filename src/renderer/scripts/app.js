@@ -138,10 +138,6 @@
     // 更新目录大纲
     updateOutline();
 
-    // 默认启用预览模式
-    btnPreview.classList.add('active');
-    isPreviewMode = true;
-
     // 初始化编辑器状态（未选中文件）
     updateEditorVisibility();
     disableEditor();
@@ -151,7 +147,7 @@
   // 事件绑定
   // ========================================
   function bindEvents() {
-    // 预览按钮
+    // 预览按钮（默认关闭）
     btnPreview.addEventListener('click', togglePreview);
 
     // 添加按钮（下拉菜单触发）
@@ -251,6 +247,12 @@
         break;
       case 'toggle-outline':
         toggleOutline();
+        break;
+      case 'theme-light':
+        setTheme('light');
+        break;
+      case 'theme-dark':
+        setTheme('dark');
         break;
       case 'settings':
         showSettingsDialog();
@@ -443,11 +445,47 @@
       const result = await window.electronAPI.createItem(currentWorkspace, fileName, false);
       if (result.success) {
         await refreshFileTree();
-        await openFile(result.path);
+        // 自动打开新创建的文件，文件树保持可见
+        await openFileInEditor(result.path);
       } else {
         showConfirm('错误', `创建文件失败：${result.error || '未知错误'}`, null);
       }
     });
+  }
+
+  /**
+   * 在编辑器中打开文件（不改变文件树可见性）
+   */
+  async function openFileInEditor(filePath) {
+    const fileName = filePath.split('/').pop();
+    const content = await window.electronAPI.readFile(filePath);
+    currentFilePath = filePath;
+    currentFileName = fileName;
+    currentFileContent = content;
+
+    // 显示编辑器区域，隐藏欢迎界面
+    const wrapper = document.getElementById('editor-wrapper');
+    const welcome = document.getElementById('editor-welcome');
+    const editor = document.getElementById('editor');
+    const placeholder = document.getElementById('editor-placeholder');
+    const fileNameEl = document.getElementById('current-file-name');
+
+    if (wrapper) wrapper.style.display = 'flex';
+    if (welcome) welcome.classList.add('hidden');
+    if (editor) {
+      editor.innerHTML = markdownToHtml(content);
+      editor.contentEditable = 'true';
+      editor.style.opacity = '1';
+      editor.style.pointerEvents = 'auto';
+    }
+    if (placeholder) placeholder.style.display = content ? 'none' : 'block';
+    if (fileNameEl) fileNameEl.textContent = fileName;
+
+    const stat = await window.electronAPI.getFileStat(filePath);
+    lastModifiedTime = stat ? stat.mtime : Date.now();
+
+    updateOutline();
+    updateStats();
   }
 
   /**
@@ -581,11 +619,17 @@
   // 文件树管理
   // ========================================
 
+  // 记录已展开的文件夹路径
+  let expandedFolders = new Set();
+
   /**
-   * 刷新文件树
+   * 刷新文件树（保持展开状态）
    */
   async function refreshFileTree() {
     if (!currentWorkspace) return;
+
+    // 保存当前展开状态
+    const previousExpanded = new Set(expandedFolders);
 
     const items = await window.electronAPI.readDirectory(currentWorkspace);
     fileTree.innerHTML = '';
@@ -599,6 +643,42 @@
       const el = createTreeItem(item);
       fileTree.appendChild(el);
     });
+
+    // 恢复展开状态
+    previousExpanded.forEach(path => {
+      const treeItem = document.querySelector(`[data-path="${CSS.escape(path)}"]`);
+      if (treeItem) {
+        const children = treeItem.querySelector('.tree-children');
+        const expandBtn = treeItem.querySelector('.tree-item-expand');
+        if (children && expandBtn) {
+          // 确保子项已加载
+          const item = findItemByPath(items, path);
+          if (item && item.children && item.children.length > 0) {
+            children.innerHTML = '';
+            item.children.forEach(child => {
+              children.appendChild(createTreeItem(child, 1));
+            });
+          }
+          children.style.display = 'block';
+          expandBtn.dataset.expanded = 'true';
+          expandBtn.classList.add('expanded');
+        }
+      }
+    });
+  }
+
+  /**
+   * 根据路径查找文件树项
+   */
+  function findItemByPath(items, targetPath) {
+    for (const item of items) {
+      if (item.path === targetPath) return item;
+      if (item.children) {
+        const found = findItemByPath(item.children, targetPath);
+        if (found) return found;
+      }
+    }
+    return null;
   }
 
   /**
@@ -673,11 +753,15 @@
       children.style.display = 'block';
       expandBtn.dataset.expanded = 'true';
       expandBtn.classList.add('expanded');
+      // 记录展开状态
+      expandedFolders.add(item.path);
     } else {
       // 折叠
       children.style.display = 'none';
       expandBtn.dataset.expanded = 'false';
       expandBtn.classList.remove('expanded');
+      // 移除展开状态
+      expandedFolders.delete(item.path);
     }
   }
 
@@ -1751,8 +1835,11 @@
         showDialog('新建文件', '', async name => {
           if (name) {
             const ext = name.endsWith('.md') ? '' : '.md';
-            await window.electronAPI.createItem(parentPath, name + ext, false);
-            await refreshFileTree();
+            const result = await window.electronAPI.createItem(parentPath, name + ext, false);
+            if (result.success) {
+              await refreshFileTree();
+              await openFileInEditor(result.path);
+            }
           }
         });
         break;
