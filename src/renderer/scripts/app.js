@@ -20,6 +20,7 @@
   let fileWatcherInterval = null;    // 文件监控定时器
   let assetsFolderPath = null;       // 图片资源文件夹路径
   let isPreviewMode = false;         // 是否启用实时预览
+  let isOutlineEnabled = false;       // 是否启用目录大纲
 
   // ========================================
   // DOM 元素引用 - 在 init() 中初始化
@@ -135,12 +136,40 @@
     // 绑定所有事件监听器
     bindEvents();
 
+    // 从 localStorage 恢复用户设置
+    restoreUserSettings();
+
     // 更新目录大纲
     updateOutline();
 
     // 初始化编辑器状态（未选中文件）
     updateEditorVisibility();
     disableEditor();
+  }
+
+  /**
+   * 从 localStorage 恢复用户设置
+   */
+  function restoreUserSettings() {
+    // 恢复预览模式设置
+    const savedPreview = localStorage.getItem('flowmark-preview-enabled');
+    if (savedPreview === 'true') {
+      isPreviewMode = true;
+      btnPreview.classList.add('active');
+      previewContent.classList.remove('hidden');
+    } else {
+      previewContent.classList.add('hidden');
+    }
+
+    // 恢复目录大纲设置
+    const savedOutline = localStorage.getItem('flowmark-outline-enabled');
+    if (savedOutline === 'true') {
+      isOutlineEnabled = true;
+      document.getElementById('outline-panel').style.display = 'block';
+    } else {
+      isOutlineEnabled = false;
+      document.getElementById('outline-panel').style.display = 'none';
+    }
   }
 
   // ========================================
@@ -274,8 +303,14 @@
    * 切换大纲显示
    */
   function toggleOutline() {
+    isOutlineEnabled = !isOutlineEnabled;
     const outlinePanel = document.getElementById('outline-panel');
-    outlinePanel.style.display = outlinePanel.style.display === 'none' ? 'block' : 'none';
+    if (isOutlineEnabled) {
+      outlinePanel.style.display = 'block';
+    } else {
+      outlinePanel.style.display = 'none';
+    }
+    localStorage.setItem('flowmark-outline-enabled', isOutlineEnabled);
   }
 
   /**
@@ -1242,48 +1277,39 @@
     const selectedText = selection.toString();
 
     if (selectedText) {
-      // 保存选区
-      const savedRanges = [];
-      for (let i = 0; i < selection.rangeCount; i++) {
-        savedRanges.push(selection.getRangeAt(i).cloneRange());
-      }
-
-      // 恢复选区
+      // 有选区，直接包裹
+      const range = selection.getRangeAt(0);
+      const wrapper = document.createElement(tag);
+      wrapper.textContent = selectedText;
+      range.deleteContents();
+      range.insertNode(wrapper);
+      range.setStartAfter(wrapper);
+      range.collapse(true);
       selection.removeAllRanges();
-      savedRanges.forEach(r => selection.addRange(r));
-
-      // 使用浏览器原生命令
-      switch (tag) {
-        case 'strong':
-          document.execCommand('bold', false, null);
-          break;
-        case 'em':
-          document.execCommand('italic', false, null);
-          break;
-        case 'u':
-          document.execCommand('underline', false, null);
-          break;
-        case 's':
-          document.execCommand('strikeThrough', false, null);
-          break;
-        default: {
-          const range = selection.getRangeAt(0);
-          const wrapper = document.createElement(tag);
-          wrapper.textContent = selectedText;
-          range.deleteContents();
-          range.insertNode(wrapper);
-          range.setStartAfter(wrapper);
-          range.collapse(true);
-          selection.removeAllRanges();
-          selection.addRange(range);
-        }
-      }
+      selection.addRange(range);
     } else {
-      // 无选区，插入空标签
+      // 无选区，插入空标签对并将光标放在标签内
       editor.focus();
       const wrapper = document.createElement(tag);
-      wrapper.innerHTML = ' ';
-      insertHTMLAtCursor(wrapper.outerHTML);
+      wrapper.textContent = '​'; // 零宽空格，让光标可以进入空标签
+
+      if (selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        range.deleteContents();
+        range.insertNode(wrapper);
+        // 将光标放在零宽空格之后（即标签内）
+        range.selectNodeContents(wrapper);
+        range.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      } else {
+        editor.appendChild(wrapper);
+        const range = document.createRange();
+        range.selectNodeContents(wrapper);
+        range.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
     }
 
     editor.focus();
@@ -1291,18 +1317,55 @@
   }
 
   /**
-   * 插入代码块
+   * 插入代码块（使用 div 替代 pre 以支持 ContentEditable）
    */
   function insertCodeBlock() {
     editor.focus();
     const selection = window.getSelection();
-    if (selection.rangeCount === 0) {
-      const range = document.createRange();
-      range.selectNodeContents(editor);
-      range.collapse(false);
-      selection.addRange(range);
+
+    // 检查是否在已有的代码块内
+    let inCodeBlock = false;
+    if (selection.rangeCount > 0) {
+      const node = selection.anchorNode;
+      if (node.parentElement && node.parentElement.classList.contains('code-block')) {
+        inCodeBlock = true;
+      }
     }
-    insertHTMLAtCursor('<pre class="code-block"><code></code></pre>');
+
+    if (inCodeBlock) {
+      // 已经在代码块内，直接插入换行
+      insertHTMLAtCursor('<br>');
+      return;
+    }
+
+    // 不在代码块内，插入新的代码块
+    // 使用 div.code-block 替代 pre.code-block，便于在 ContentEditable 中编辑
+    const codeBlock = document.createElement('div');
+    codeBlock.className = 'code-block';
+    codeBlock.contentEditable = 'true';
+
+    // 插入到当前光标位置
+    if (selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      range.deleteContents();
+      range.insertNode(codeBlock);
+
+      // 将光标移到代码块内部（在开头位置）
+      const newRange = document.createRange();
+      newRange.setStart(codeBlock, 0);
+      newRange.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(newRange);
+    } else {
+      editor.appendChild(codeBlock);
+      const newRange = document.createRange();
+      newRange.setStart(codeBlock, 0);
+      newRange.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(newRange);
+    }
+
+    handleEditorInput();
   }
 
   /**
@@ -1735,6 +1798,7 @@
       previewContent.classList.add('hidden');
       btnPreview.classList.remove('active');
     }
+    localStorage.setItem('flowmark-preview-enabled', isPreviewMode);
   }
 
   /**
