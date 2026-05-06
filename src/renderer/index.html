@@ -12,14 +12,23 @@
     <!-- 左侧边栏 -->
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-header">
-        <span class="sidebar-title">工作区</span>
-        <div class="sidebar-actions">
-          <button class="icon-btn" id="btn-preview" title="实时预览">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" stroke="currentColor" stroke-width="1.2"/>
-              <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.2"/>
+        <!-- 标签页：文件 / 最近 -->
+        <div class="sidebar-tabs">
+          <button class="sidebar-tab active" data-tab="files">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M2 2h4l1 1h5a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.1"/>
             </svg>
+            文件
           </button>
+          <button class="sidebar-tab" data-tab="recent">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.1"/>
+              <path d="M7 4v3.5l2.5 1.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+            </svg>
+            最近
+          </button>
+        </div>
+        <div class="sidebar-actions">
           <div class="add-dropdown" id="add-dropdown">
             <button class="icon-btn" id="btn-add" title="添加">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -52,42 +61,147 @@
         </div>
       </div>
       <div class="workspace-name" id="workspace-name">未选择工作区</div>
+      <!-- 搜索框 -->
+      <div class="sidebar-search" id="sidebar-search">
+        <svg class="sidebar-search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.1"/>
+          <path d="M9.5 9.5l3 3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+        </svg>
+        <input type="text" class="sidebar-search-input" id="sidebar-search-input" placeholder="搜索文件...">
+        <button class="sidebar-search-close" id="sidebar-search-close" style="display: none;">×</button>
+      </div>
+      <!-- 搜索结果 -->
+      <div class="sidebar-search-results" id="sidebar-search-results"></div>
+      <!-- 文件列表 -->
       <div class="file-tree" id="file-tree">
         <div class="empty-state" id="empty-state">
           <p>点击 + 按钮选择工作区</p>
+        </div>
+      </div>
+      <!-- 最近文件列表 -->
+      <div class="recent-list" id="recent-list" style="display: none;">
+        <div class="recent-empty" id="recent-empty">
+          <p>暂无最近文件</p>
         </div>
       </div>
     </aside>
 
     <!-- 主编辑区 -->
     <main class="editor-container">
-      <div class="editor-header" id="editor-header">
-        <span class="file-name" id="current-file-name">未打开文件</span>
-        <div class="insert-menu" id="insert-menu">
-          <button class="menu-btn" data-cmd="h1" title="一级标题">H1</button>
-          <button class="menu-btn" data-cmd="h2" title="二级标题">H2</button>
-          <button class="menu-btn" data-cmd="h3" title="三级标题">H3</button>
-          <span class="menu-sep">|</span>
-          <button class="menu-btn" data-cmd="bold" title="加粗 (Ctrl+B)"><strong>B</strong></button>
-          <button class="menu-btn" data-cmd="italic" title="斜体 (Ctrl+I)"><em>I</em></button>
-          <button class="menu-btn" data-cmd="underline" title="下划线"><u>U</u></button>
-          <button class="menu-btn" data-cmd="strikethrough" title="删除线"><s>S</s></button>
-          <span class="menu-sep">|</span>
-          <button class="menu-btn" data-cmd="link" title="链接">🔗</button>
-          <button class="menu-btn" data-cmd="image" title="图片">🖼</button>
-          <button class="menu-btn" data-cmd="code" title="行内代码">&lt;/&gt;</button>
-          <button class="menu-btn" data-cmd="codeblock" title="代码块">{ }</button>
-          <span class="menu-sep">|</span>
-          <button class="menu-btn" data-cmd="ul" title="无序列表">•</button>
-          <button class="menu-btn" data-cmd="ol" title="有序列表">1.</button>
-          <button class="menu-btn" data-cmd="todo" title="待办清单">☐</button>
-          <button class="menu-btn" data-cmd="blockquote" title="引用">"</button>
-          <button class="menu-btn" data-cmd="hr" title="分割线">—</button>
-          <span class="menu-sep">|</span>
-          <button class="menu-btn" data-cmd="table" title="表格">⊞</button>
+      <!-- MarkReader 风格工具栏 -->
+      <div class="toolbar" id="toolbar">
+        <div class="toolbar-left">
+          <span class="file-name" id="current-file-name">未打开文件</span>
+          <span class="reading-progress" id="reading-progress"></span>
         </div>
-        <span class="save-status" id="save-status"></span>
+        <div class="toolbar-center">
+          <button class="toolbar-btn" id="btn-zoom-decrease" title="缩小">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.2"/>
+              <path d="M11 11l3 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+              <path d="M5 7h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <span class="zoom-level" id="zoom-level">100%</span>
+          <button class="toolbar-btn" id="btn-zoom-increase" title="放大">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.2"/>
+              <path d="M11 11l3 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+              <path d="M5 7h4M7 5v4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <span class="toolbar-sep">|</span>
+          <button class="toolbar-btn" id="btn-reading-mode" title="阅读模式">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M2 3h12v10H2z" stroke="currentColor" stroke-width="1.2"/>
+              <path d="M4 5h8M4 8h8M4 11h6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <button class="toolbar-btn" id="btn-outline" title="大纲">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+        <div class="toolbar-right">
+          <button class="toolbar-btn" id="btn-search" title="搜索 (Cmd+F)">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" stroke-width="1.2"/>
+              <path d="M10 10l3.5 3.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <button class="toolbar-btn" id="btn-fullscreen" title="全屏">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M2 5V2h3M11 2h3v3M14 11v3h-3M5 14H2v-3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <div class="view-switch" id="view-switch">
+            <button class="view-btn active" data-view="edit" title="编辑">编辑</button>
+            <button class="view-btn" data-view="preview" title="预览">预览</button>
+            <button class="view-btn" data-view="both" title="双栏">双栏</button>
+          </div>
+          <div class="font-size-control">
+            <button class="toolbar-btn" id="btn-font-decrease" title="减小字体">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M3 7h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </button>
+            <span class="font-size-display" id="font-size-display">16</span>
+            <button class="toolbar-btn" id="btn-font-increase" title="增大字体">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M7 3v8M3 7h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
+          <div class="theme-select" id="theme-select">
+            <button class="toolbar-btn" id="btn-theme" title="主题">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.2"/>
+                <path d="M8 2v2M8 12v2M2 8h2M12 8h2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+              </svg>
+            </button>
+            <div class="theme-dropdown" id="theme-dropdown">
+              <div class="theme-option" data-theme="light">
+                <span class="theme-color" style="background: #fff; border: 1px solid #ddd;"></span>
+                浅色
+              </div>
+              <div class="theme-option" data-theme="dark">
+                <span class="theme-color" style="background: #1e1e1e;"></span>
+                深色
+              </div>
+              <div class="theme-option" data-theme="sepia">
+                <span class="theme-color" style="background: #F4ECD8;"></span>
+                护眼
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
+      <!-- 旧的工具栏保留用于编辑功能 -->
+      <div class="insert-menu" id="insert-menu" style="display: none;">
+        <button class="menu-btn" data-cmd="h1" title="一级标题">H1</button>
+        <button class="menu-btn" data-cmd="h2" title="二级标题">H2</button>
+        <button class="menu-btn" data-cmd="h3" title="三级标题">H3</button>
+        <span class="menu-sep">|</span>
+        <button class="menu-btn" data-cmd="bold" title="加粗 (Ctrl+B)"><strong>B</strong></button>
+        <button class="menu-btn" data-cmd="italic" title="斜体 (Ctrl+I)"><em>I</em></button>
+        <button class="menu-btn" data-cmd="underline" title="下划线"><u>U</u></button>
+        <button class="menu-btn" data-cmd="strikethrough" title="删除线"><s>S</s></button>
+        <span class="menu-sep">|</span>
+        <button class="menu-btn" data-cmd="link" title="链接">🔗</button>
+        <button class="menu-btn" data-cmd="image" title="图片">🖼</button>
+        <button class="menu-btn" data-cmd="code" title="行内代码">&lt;/&gt;</button>
+        <button class="menu-btn" data-cmd="codeblock" title="代码块">{ }</button>
+        <span class="menu-sep">|</span>
+        <button class="menu-btn" data-cmd="ul" title="无序列表">•</button>
+        <button class="menu-btn" data-cmd="ol" title="有序列表">1.</button>
+        <button class="menu-btn" data-cmd="todo" title="待办清单">☐</button>
+        <button class="menu-btn" data-cmd="blockquote" title="引用">"</button>
+        <button class="menu-btn" data-cmd="hr" title="分割线">—</button>
+        <span class="menu-sep">|</span>
+        <button class="menu-btn" data-cmd="table" title="表格">⊞</button>
+      </div>
+      <span class="save-status" id="save-status"></span>
       <div class="editor-split">
         <!-- 无文件选中时的欢迎界面 -->
         <div class="editor-welcome" id="editor-welcome">
@@ -131,6 +245,15 @@
       <span class="slash-title">插入模块</span>
     </div>
     <div class="slash-list" id="slash-list"></div>
+  </div>
+
+  <!-- 搜索面板 -->
+  <div class="search-panel" id="search-panel">
+    <div class="search-header">
+      <input type="text" class="search-input" id="search-input" placeholder="搜索文档内容...">
+      <button class="search-close" id="search-close">×</button>
+    </div>
+    <div class="search-results" id="search-results"></div>
   </div>
 
   <!-- 格式化工具栏 -->

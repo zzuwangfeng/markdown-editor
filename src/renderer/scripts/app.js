@@ -21,11 +21,16 @@
   let assetsFolderPath = null;       // 图片资源文件夹路径
   let isPreviewMode = false;         // 是否启用实时预览
   let isOutlineEnabled = false;       // 是否启用目录大纲
+  let isReadingMode = false;         // 是否启用阅读模式
+  let currentZoom = 100;             // 当前缩放级别
+  let currentFontSize = 16;          // 当前字体大小
+  let currentView = 'edit';          // 当前视图模式：edit/preview/both
+  let currentTheme = 'light';        // 当前主题：light/dark/sepia
 
   // ========================================
   // DOM 元素引用 - 在 init() 中初始化
   // ========================================
-  let sidebar, fileTree, emptyState, workspaceName;
+  let sidebar, fileTree, emptyState, workspaceName, recentList, recentEmpty;
   let btnAdd, dropdownMenu, editor, editorPlaceholder;
   let editorWrapper, editorWelcome;
   let currentFileNameEl, saveStatus, wordCount, lineInfo;
@@ -33,12 +38,22 @@
   let slashPanel, slashList;
   let conflictOverlay, conflictMessage;
   let tableDialogOverlay, imageProgress;
-  let btnPreview, previewContent;
+  let previewContent;
   let dialogOverlay, dialogTitle, dialogInput;
   let dialogCancel, dialogConfirm;
   let confirmOverlay, confirmTitle, confirmMessage;
   let confirmCancel, confirmOk;
   let aboutOverlay, aboutClose;
+  // 新增工具栏相关元素
+  let toolbar, zoomLevel, fontSizeDisplay, readingProgress;
+  let btnZoomDecrease, btnZoomIncrease;
+  let btnReadingMode, btnOutline, btnSearch, btnFullscreen;
+  let btnFontDecrease, btnFontIncrease;
+  let btnTheme, themeDropdown;
+  let viewSwitch, searchPanel, searchInput, searchResults, searchClose;
+  let sidebarTabs;
+  // 侧边栏搜索元素
+  let sidebarSearch, sidebarSearchInput, sidebarSearchClose, sidebarSearchResults;
 
   // ========================================
   // 斜杠命令配置 - 输入 / 唤起命令面板
@@ -99,6 +114,8 @@
     fileTree = document.getElementById('file-tree');
     emptyState = document.getElementById('empty-state');
     workspaceName = document.getElementById('workspace-name');
+    recentList = document.getElementById('recent-list');
+    recentEmpty = document.getElementById('recent-empty');
     btnAdd = document.getElementById('btn-add');
     dropdownMenu = document.getElementById('dropdown-menu');
     editor = document.getElementById('editor');
@@ -118,7 +135,6 @@
     conflictMessage = document.getElementById('conflict-message');
     tableDialogOverlay = document.getElementById('table-dialog-overlay');
     imageProgress = document.getElementById('image-progress');
-    btnPreview = document.getElementById('btn-preview');
     previewContent = document.getElementById('preview-content');
     dialogOverlay = document.getElementById('dialog-overlay');
     dialogTitle = document.getElementById('dialog-title');
@@ -132,6 +148,31 @@
     confirmOk = document.getElementById('confirm-ok');
     aboutOverlay = document.getElementById('about-overlay');
     aboutClose = document.getElementById('about-close');
+    // 工具栏元素
+    toolbar = document.getElementById('toolbar');
+    zoomLevel = document.getElementById('zoom-level');
+    fontSizeDisplay = document.getElementById('font-size-display');
+    readingProgress = document.getElementById('reading-progress');
+    btnZoomDecrease = document.getElementById('btn-zoom-decrease');
+    btnZoomIncrease = document.getElementById('btn-zoom-increase');
+    btnReadingMode = document.getElementById('btn-reading-mode');
+    btnOutline = document.getElementById('btn-outline');
+    btnSearch = document.getElementById('btn-search');
+    btnFullscreen = document.getElementById('btn-fullscreen');
+    btnFontDecrease = document.getElementById('btn-font-decrease');
+    btnFontIncrease = document.getElementById('btn-font-increase');
+    btnTheme = document.getElementById('btn-theme');
+    themeDropdown = document.getElementById('theme-dropdown');
+    viewSwitch = document.getElementById('view-switch');
+    searchPanel = document.getElementById('search-panel');
+    searchInput = document.getElementById('search-input');
+    searchResults = document.getElementById('search-results');
+    searchClose = document.getElementById('search-close');
+    sidebarTabs = document.querySelectorAll('.sidebar-tab');
+    sidebarSearch = document.getElementById('sidebar-search');
+    sidebarSearchInput = document.getElementById('sidebar-search-input');
+    sidebarSearchClose = document.getElementById('sidebar-search-close');
+    sidebarSearchResults = document.getElementById('sidebar-search-results');
 
     // 绑定所有事件监听器
     bindEvents();
@@ -145,6 +186,9 @@
     // 初始化编辑器状态（未选中文件）
     updateEditorVisibility();
     disableEditor();
+
+    // 渲染最近文件列表
+    renderRecentFiles();
   }
 
   /**
@@ -155,7 +199,6 @@
     const savedPreview = localStorage.getItem('flowmark-preview-enabled');
     if (savedPreview === 'true') {
       isPreviewMode = true;
-      btnPreview.classList.add('active');
       previewContent.classList.remove('hidden');
     } else {
       previewContent.classList.add('hidden');
@@ -166,9 +209,37 @@
     if (savedOutline === 'true') {
       isOutlineEnabled = true;
       document.getElementById('outline-panel').style.display = 'block';
+      btnOutline.classList.add('active');
     } else {
       isOutlineEnabled = false;
       document.getElementById('outline-panel').style.display = 'none';
+    }
+
+    // 恢复主题设置
+    const savedTheme = localStorage.getItem('flowmark-theme') || 'light';
+    setTheme(savedTheme);
+    currentTheme = savedTheme;
+    updateThemeUI();
+
+    // 恢复字体大小
+    const savedFontSize = localStorage.getItem('flowmark-font-size');
+    if (savedFontSize) {
+      currentFontSize = parseInt(savedFontSize);
+      fontSizeDisplay.textContent = currentFontSize;
+      editor.style.fontSize = currentFontSize + 'px';
+    }
+
+    // 恢复缩放级别
+    const savedZoom = localStorage.getItem('flowmark-zoom');
+    if (savedZoom) {
+      currentZoom = parseInt(savedZoom);
+      zoomLevel.textContent = currentZoom + '%';
+    }
+
+    // 恢复视图模式
+    const savedView = localStorage.getItem('flowmark-view');
+    if (savedView) {
+      setViewMode(savedView);
     }
   }
 
@@ -176,9 +247,6 @@
   // 事件绑定
   // ========================================
   function bindEvents() {
-    // 预览按钮（默认关闭）
-    btnPreview.addEventListener('click', togglePreview);
-
     // 添加按钮（下拉菜单触发）
     btnAdd.addEventListener('click', handleAddClick);
 
@@ -204,6 +272,11 @@
     // 上下文菜单和斜杠面板
     document.addEventListener('click', hideContextMenu);
     document.addEventListener('click', hideSlashPanel);
+    document.addEventListener('click', e => {
+      if (searchPanel.classList.contains('visible') && !e.target.closest('.search-panel')) {
+        hideSearchPanel();
+      }
+    });
     document.addEventListener('keydown', handleGlobalKeydown);
 
     // 插入菜单按钮
@@ -255,6 +328,222 @@
     aboutOverlay.addEventListener('click', e => {
       if (e.target === aboutOverlay) hideAboutDialog();
     });
+
+    // ===== 新增工具栏事件绑定 =====
+
+    // 侧边栏标签页切换
+    sidebarTabs.forEach(tab => {
+      tab.addEventListener('click', () => switchSidebarTab(tab.dataset.tab));
+    });
+
+    // 缩放控制
+    btnZoomDecrease.addEventListener('click', () => adjustZoom(-10));
+    btnZoomIncrease.addEventListener('click', () => adjustZoom(10));
+
+    // 阅读模式
+    btnReadingMode.addEventListener('click', toggleReadingMode);
+
+    // 大纲切换
+    btnOutline.addEventListener('click', () => {
+      toggleOutline();
+      btnOutline.classList.toggle('active', isOutlineEnabled);
+    });
+
+    // 搜索
+    btnSearch.addEventListener('click', toggleSearchPanel);
+    searchClose.addEventListener('click', hideSearchPanel);
+    searchInput.addEventListener('input', handleSearchInput);
+
+    // 全屏
+    btnFullscreen.addEventListener('click', toggleFullscreen);
+
+    // 字体大小
+    btnFontDecrease.addEventListener('click', () => adjustFontSize(-1));
+    btnFontIncrease.addEventListener('click', () => adjustFontSize(1));
+
+    // 主题选择
+    btnTheme.addEventListener('click', toggleThemeDropdown);
+    themeDropdown.querySelectorAll('.theme-option').forEach(option => {
+      option.addEventListener('click', () => {
+        setTheme(option.dataset.theme);
+        themeDropdown.classList.remove('visible');
+      });
+    });
+    document.addEventListener('click', e => {
+      if (!e.target.closest('.theme-select')) {
+        themeDropdown.classList.remove('visible');
+      }
+    });
+
+    // 视图切换
+    viewSwitch.querySelectorAll('.view-btn').forEach(btn => {
+      btn.addEventListener('click', () => setViewMode(btn.dataset.view));
+    });
+
+    // 侧边栏搜索
+    sidebarSearchInput.addEventListener('input', handleSidebarSearch);
+    sidebarSearchClose.addEventListener('click', clearSidebarSearch);
+  }
+
+  /**
+   * 处理侧边栏搜索输入
+   */
+  async function handleSidebarSearch() {
+    const query = sidebarSearchInput.value.trim();
+    if (!query) {
+      clearSidebarSearch();
+      return;
+    }
+
+    sidebarSearchClose.style.display = 'flex';
+    sidebarSearchResults.classList.add('visible');
+
+    // 先按文件名搜索
+    const fileResults = await searchFilesByName(query);
+    // 再按内容搜索
+    const contentResults = await searchFilesByContent(query);
+
+    // 合并结果，文件名匹配优先
+    const allResults = [...fileResults, ...contentResults.filter(f => !fileResults.some(r => r.path === f.path))];
+
+    renderSidebarSearchResults(allResults, query);
+  }
+
+  /**
+   * 按文件名搜索
+   */
+  async function searchFilesByName(query) {
+    if (!currentWorkspace) return [];
+
+    const results = [];
+    const allFiles = await getAllMdFiles(currentWorkspace);
+
+    for (const file of allFiles) {
+      if (file.name.toLowerCase().includes(query.toLowerCase())) {
+        results.push({
+          path: file.path,
+          name: file.name,
+          type: 'name',
+          matchedText: file.name
+        });
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * 递归获取所有 md 文件
+   */
+  async function getAllMdFiles(dirPath) {
+    const files = [];
+    try {
+      const items = await window.electronAPI.readDirectory(dirPath);
+      for (const item of items) {
+        if (item.isDirectory) {
+          if (item.children && item.children.length > 0) {
+            const subFiles = await getAllMdFiles(item.path);
+            files.push(...subFiles);
+          }
+        } else if (item.name.endsWith('.md')) {
+          files.push(item);
+        }
+      }
+    } catch (e) {
+      // 忽略错误
+    }
+    return files;
+  }
+
+  /**
+   * 按文件内容搜索
+   */
+  async function searchFilesByContent(query) {
+    if (!currentWorkspace) return [];
+
+    const results = [];
+    const allFiles = await getAllMdFiles(currentWorkspace);
+
+    for (const file of allFiles) {
+      try {
+        const content = await window.electronAPI.readFile(file.path);
+        const lowerContent = content.toLowerCase();
+        const lowerQuery = query.toLowerCase();
+        const index = lowerContent.indexOf(lowerQuery);
+
+        if (index !== -1) {
+          // 提取匹配周围的文本片段
+          const start = Math.max(0, index - 20);
+          const end = Math.min(content.length, index + query.length + 20);
+          let snippet = content.substring(start, end);
+          if (start > 0) snippet = '...' + snippet;
+          if (end < content.length) snippet = snippet + '...';
+
+          results.push({
+            path: file.path,
+            name: file.name,
+            type: 'content',
+            matchedText: snippet,
+            matchedIndex: index
+          });
+        }
+      } catch (e) {
+        // 忽略错误
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * 渲染侧边栏搜索结果
+   */
+  function renderSidebarSearchResults(results, query) {
+    if (results.length === 0) {
+      sidebarSearchResults.innerHTML = '<div class="search-empty">未找到匹配结果</div>';
+      return;
+    }
+
+    sidebarSearchResults.innerHTML = results.map(result => {
+      const highlightedName = highlightMatch(result.name, query);
+      const typeIcon = result.type === 'name' ? '📄' : '📝';
+      return `<div class="search-result-item" data-path="${result.path}">
+        <span class="search-result-icon">${typeIcon}</span>
+        <div class="search-result-info">
+          <div class="search-result-name">${highlightedName}</div>
+          <div class="search-result-path">${result.path}</div>
+        </div>
+      </div>`;
+    }).join('');
+
+    // 绑定点击事件
+    sidebarSearchResults.querySelectorAll('.search-result-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const filePath = item.dataset.path;
+        const fileName = filePath.split('/').pop();
+        loadFile(filePath, fileName);
+        clearSidebarSearch();
+      });
+    });
+  }
+
+  /**
+   * 高亮匹配文本
+   */
+  function highlightMatch(text, query) {
+    if (!query) return text;
+    const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    return text.replace(regex, '<mark>$1</mark>');
+  }
+
+  /**
+   * 清除搜索
+   */
+  function clearSidebarSearch() {
+    sidebarSearchInput.value = '';
+    sidebarSearchClose.style.display = 'none';
+    sidebarSearchResults.classList.remove('visible');
+    sidebarSearchResults.innerHTML = '';
   }
 
   /**
@@ -347,11 +636,303 @@
    * 设置主题
    */
   function setTheme(theme) {
+    currentTheme = theme;
     if (theme === 'system') {
       document.documentElement.removeAttribute('data-theme');
     } else {
       document.documentElement.setAttribute('data-theme', theme);
     }
+    localStorage.setItem('flowmark-theme', theme);
+    updateThemeUI();
+  }
+
+  /**
+   * 更新主题 UI 选中状态
+   */
+  function updateThemeUI() {
+    themeDropdown.querySelectorAll('.theme-option').forEach(option => {
+      option.classList.toggle('active', option.dataset.theme === currentTheme);
+    });
+  }
+
+  /**
+   * 切换主题下拉菜单
+   */
+  function toggleThemeDropdown(e) {
+    e.stopPropagation();
+    themeDropdown.classList.toggle('visible');
+  }
+
+  /**
+   * 侧边栏标签页切换
+   */
+  function switchSidebarTab(tab) {
+    sidebarTabs.forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+
+    if (tab === 'files') {
+      fileTree.style.display = 'block';
+      recentList.style.display = 'none';
+    } else {
+      fileTree.style.display = 'none';
+      recentList.style.display = 'block';
+      renderRecentFiles();
+    }
+  }
+
+  /**
+   * 渲染最近文件列表
+   */
+  function renderRecentFiles() {
+    const recentFiles = getRecentFiles();
+    recentList.innerHTML = '';
+
+    if (recentFiles.length === 0) {
+      recentList.innerHTML = '<div class="recent-empty"><p>暂无最近文件</p></div>';
+      return;
+    }
+
+    recentFiles.forEach(file => {
+      const item = document.createElement('div');
+      item.className = 'recent-item';
+      item.innerHTML = `
+        <svg class="recent-item-icon" viewBox="0 0 16 16" fill="none">
+          <path d="M9 1.5H4.5A1.5 1.5 0 0 0 3 3v10a1.5 1.5 0 0 0 1.5 1.5h7a1.5 1.5 0 0 0 1.5-1.5V6L9 1.5z" stroke="currentColor" stroke-width="1.1"/>
+          <path d="M9 1.5v4.5h4.5" stroke="currentColor" stroke-width="1.1"/>
+        </svg>
+        <span class="recent-item-name">${file.name}</span>
+      `;
+      item.addEventListener('click', () => openRecentFile(file.path));
+      recentList.appendChild(item);
+    });
+  }
+
+  /**
+   * 获取最近文件列表
+   */
+  function getRecentFiles() {
+    try {
+      return JSON.parse(localStorage.getItem('flowmark-recent-files') || '[]');
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * 添加文件到最近列表
+   */
+  function addToRecentFiles(filePath, fileName) {
+    let recentFiles = getRecentFiles();
+    // 移除已存在的
+    recentFiles = recentFiles.filter(f => f.path !== filePath);
+    // 添加到开头
+    recentFiles.unshift({ path: filePath, name: fileName, time: Date.now() });
+    // 最多保存 20 个
+    recentFiles = recentFiles.slice(0, 20);
+    localStorage.setItem('flowmark-recent-files', JSON.stringify(recentFiles));
+  }
+
+  /**
+   * 打开最近文件
+   */
+  async function openRecentFile(filePath) {
+    try {
+      await loadFile(filePath, filePath.split('/').pop());
+    } catch (e) {
+      // 文件可能已被删除
+      let recentFiles = getRecentFiles().filter(f => f.path !== filePath);
+      localStorage.setItem('flowmark-recent-files', JSON.stringify(recentFiles));
+      renderRecentFiles();
+    }
+  }
+
+  /**
+   * 调整缩放级别
+   */
+  function adjustZoom(delta) {
+    currentZoom = Math.max(50, Math.min(200, currentZoom + delta));
+    zoomLevel.textContent = currentZoom + '%';
+    editor.style.zoom = currentZoom / 100;
+    localStorage.setItem('flowmark-zoom', currentZoom);
+  }
+
+  /**
+   * 调整字体大小
+   */
+  function adjustFontSize(delta) {
+    currentFontSize = Math.max(12, Math.min(24, currentFontSize + delta));
+    fontSizeDisplay.textContent = currentFontSize;
+    editor.style.fontSize = currentFontSize + 'px';
+    localStorage.setItem('flowmark-font-size', currentFontSize);
+  }
+
+  /**
+   * 切换阅读模式
+   */
+  function toggleReadingMode() {
+    isReadingMode = !isReadingMode;
+    btnReadingMode.classList.toggle('active', isReadingMode);
+    document.querySelector('.editor-container').classList.toggle('reading-mode', isReadingMode);
+
+    if (isReadingMode) {
+      // 显示插入菜单工具栏
+      document.getElementById('insert-menu').style.display = 'flex';
+    } else {
+      document.getElementById('insert-menu').style.display = 'none';
+    }
+  }
+
+  /**
+   * 切换搜索面板
+   */
+  function toggleSearchPanel() {
+    searchPanel.classList.toggle('visible');
+    if (searchPanel.classList.contains('visible')) {
+      searchInput.focus();
+    }
+  }
+
+  /**
+   * 隐藏搜索面板
+   */
+  function hideSearchPanel() {
+    searchPanel.classList.remove('visible');
+    searchInput.value = '';
+    searchResults.innerHTML = '';
+  }
+
+  /**
+   * 处理搜索输入
+   */
+  function handleSearchInput() {
+    const query = searchInput.value.trim();
+    if (!query) {
+      searchResults.innerHTML = '';
+      return;
+    }
+
+    const content = editor.innerText || '';
+    const matches = searchContent(content, query);
+    renderSearchResults(matches, query);
+  }
+
+  /**
+   * 搜索内容
+   */
+  function searchContent(content, query) {
+    const matches = [];
+    const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    let match;
+    while ((match = regex.exec(content)) !== null) {
+      const start = Math.max(0, match.index - 30);
+      const end = Math.min(content.length, match.index + query.length + 30);
+      let snippet = content.substring(start, end);
+      if (start > 0) snippet = '...' + snippet;
+      if (end < content.length) snippet = snippet + '...';
+      matches.push({ snippet, index: match.index });
+    }
+    return matches.slice(0, 50);
+  }
+
+  /**
+   * 渲染搜索结果
+   */
+  function renderSearchResults(matches, query) {
+    if (matches.length === 0) {
+      searchResults.innerHTML = '<div class="search-empty">未找到匹配内容</div>';
+      return;
+    }
+
+    searchResults.innerHTML = matches.map((match, i) => {
+      const highlighted = match.snippet.replace(
+        new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'),
+        `<mark>$&</mark>`
+      );
+      return `<div class="search-result-item" data-index="${match.index}">
+        <span class="search-result-text">${highlighted}</span>
+      </div>`;
+    }).join('');
+
+    searchResults.querySelectorAll('.search-result-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const index = parseInt(item.dataset.index);
+        scrollToSearchMatch(index, query.length);
+        hideSearchPanel();
+      });
+    });
+  }
+
+  /**
+   * 滚动到搜索匹配位置
+   */
+  function scrollToSearchMatch(index, length) {
+    // 简化实现：滚动到顶部
+    editor.scrollTop = 0;
+  }
+
+  /**
+   * 切换全屏
+   */
+  function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen();
+      btnFullscreen.classList.add('active');
+    } else {
+      document.exitFullscreen();
+      btnFullscreen.classList.remove('active');
+    }
+  }
+
+  /**
+   * 设置视图模式
+   */
+  function setViewMode(mode) {
+    currentView = mode;
+    viewSwitch.querySelectorAll('.view-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.view === mode);
+    });
+
+    const wrapper = editorWrapper;
+    const preview = previewContent;
+
+    switch (mode) {
+      case 'edit':
+        wrapper.style.display = 'flex';
+        preview.classList.add('hidden');
+        preview.style.display = 'none';
+        editor.parentElement.style.display = '';
+        editor.parentElement.style.flex = '1';
+        break;
+      case 'preview':
+        wrapper.style.display = 'flex';
+        preview.style.display = '';
+        preview.classList.remove('hidden');
+        editor.parentElement.style.display = 'none';
+        break;
+      case 'both':
+        wrapper.style.display = 'flex';
+        preview.style.display = '';
+        preview.classList.remove('hidden');
+        editor.parentElement.style.display = '';
+        editor.parentElement.style.flex = '1';
+        break;
+    }
+
+    localStorage.setItem('flowmark-view', mode);
+  }
+
+  /**
+   * 计算阅读进度
+   */
+  function calculateReadingProgress() {
+    if (!currentFilePath) {
+      readingProgress.textContent = '';
+      return;
+    }
+
+    const text = editor.innerText || '';
+    const words = text.replace(/\s/g, '').length;
+    const minutes = Math.ceil(words / 200); // 假设每分钟阅读200字
+    readingProgress.textContent = minutes > 0 ? `${minutes} 分钟阅读` : '';
   }
 
   /**
@@ -856,6 +1437,12 @@
     const stat = await window.electronAPI.getFileStat(item.path);
     lastModifiedTime = stat ? stat.mtime : Date.now();
 
+    // 添加到最近文件
+    addToRecentFiles(item.path, item.name);
+
+    // 更新阅读进度
+    calculateReadingProgress();
+
     updateOutline();
     updateStats();
   }
@@ -894,6 +1481,12 @@
 
     // 同步侧边栏选中状态
     syncSidebarSelection(filePath);
+
+    // 添加到最近文件
+    addToRecentFiles(filePath, fileName);
+
+    // 更新阅读进度
+    calculateReadingProgress();
 
     updateOutline();
     updateStats();
@@ -981,6 +1574,7 @@
     editorPlaceholder.style.display = editor.innerHTML ? 'none' : 'block';
     updateStats();
     updateOutline();
+    calculateReadingProgress();
 
     // 实时预览
     if (isPreviewMode) {
@@ -1100,6 +1694,11 @@
     items.forEach((item, index) => {
       item.classList.toggle('selected', index === slashSelectedIndex);
     });
+    // 自动滚动选中项到可视区域
+    const selectedItem = items[slashSelectedIndex];
+    if (selectedItem) {
+      selectedItem.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
   }
 
   /**
@@ -1792,11 +2391,9 @@
 
     if (isPreviewMode) {
       previewContent.classList.remove('hidden');
-      btnPreview.classList.add('active');
       renderPreview();
     } else {
       previewContent.classList.add('hidden');
-      btnPreview.classList.remove('active');
     }
     localStorage.setItem('flowmark-preview-enabled', isPreviewMode);
   }
