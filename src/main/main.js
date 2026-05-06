@@ -149,7 +149,7 @@ ipcMain.handle('read-directory', async (event, dirPath) => {
       if (isDirectory) {
         try {
           const subItems = await fs.promises.readdir(fullPath, { withFileTypes: true });
-          children = subItems
+          const mapped = subItems
             .filter(subItem => {
               // 跳过隐藏文件
               if (subItem.name.startsWith('.')) return false;
@@ -161,6 +161,13 @@ ipcMain.handle('read-directory', async (event, dirPath) => {
               path: path.join(fullPath, subItem.name),
               isDirectory: subItem.isDirectory()
             }));
+          // 子目录也要排序：文件夹在前，文件在后
+          mapped.sort((a, b) => {
+            if (a.isDirectory && !b.isDirectory) return -1;
+            if (!a.isDirectory && b.isDirectory) return 1;
+            return a.name.localeCompare(b.name);
+          });
+          children = mapped;
         } catch (e) {
           children = [];
         }
@@ -169,7 +176,15 @@ ipcMain.handle('read-directory', async (event, dirPath) => {
       return { name, path: fullPath, isDirectory, children };
     }));
 
-    return result.filter(item => item !== null);
+    // 排序：文件夹在前，文件在后，按名字排序
+    const filtered = result.filter(item => item !== null);
+    filtered.sort((a, b) => {
+      if (a.isDirectory && !b.isDirectory) return -1;
+      if (!a.isDirectory && b.isDirectory) return 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    return filtered;
   } catch (error) {
     console.error('Error reading directory:', error);
     return [];
@@ -305,4 +320,91 @@ ipcMain.handle('select-image', async () => {
     return { filePath, fileName };
   }
   return null;
+});
+
+// 项目全文搜索
+ipcMain.handle('search-project', async (event, workspace, query, options = {}) => {
+  try {
+    const { maxResults = 500, maxFiles = 50 } = options;
+    const results = [];
+    const fileMatches = new Map();
+
+    // 递归扫描目录中的 md 文件
+    async function scanDirectory(dirPath) {
+      if (results.length >= maxResults) return;
+
+      const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
+
+      for (const entry of entries) {
+        if (results.length >= maxResults) break;
+
+        // 跳过隐藏文件和非 md 文件
+        if (entry.name.startsWith('.') || (!entry.isDirectory() && !entry.name.endsWith('.md'))) {
+          continue;
+        }
+
+        const fullPath = path.join(dirPath, entry.name);
+
+        if (entry.isDirectory()) {
+          // 递归扫描子目录
+          await scanDirectory(fullPath);
+        } else {
+          // 读取文件内容进行匹配
+          try {
+            const content = await fs.promises.readFile(fullPath, 'utf-8');
+            const lines = content.split('\n');
+            const fileMatchResults = [];
+
+            for (let i = 0; i < lines.length; i++) {
+              const line = lines[i];
+              const lowerLine = line.toLowerCase();
+              const lowerQuery = query.toLowerCase();
+              let index = -1;
+
+              while ((index = lowerLine.indexOf(lowerQuery, index + 1)) !== -1) {
+                fileMatchResults.push({
+                  lineNumber: i + 1,
+                  line,
+                  matchStart: index,
+                  matchEnd: index + query.length
+                });
+
+                if (fileMatchResults.length >= 20) break; // 每个文件最多20个匹配
+              }
+
+              if (fileMatchResults.length >= 20) break;
+            }
+
+            if (fileMatchResults.length > 0) {
+              fileMatches.set(fullPath, {
+                path: fullPath,
+                name: entry.name,
+                matches: fileMatchResults
+              });
+            }
+          } catch (e) {
+            // 跳过无法读取的文件
+          }
+        }
+      }
+    }
+
+    await scanDirectory(workspace);
+
+    // 转换为结果数组
+    for (const [, fileResult] of fileMatches) {
+      results.push(fileResult);
+      if (results.length >= maxFiles) break;
+    }
+
+    return {
+      success: true,
+      results,
+      totalMatches: results.reduce((sum, r) => sum + r.matches.length, 0),
+      totalFiles: results.length
+    };
+  } catch (error) {
+    console.error('Search error:', error);
+    return { success: false, error: error.message, results: [] };
+  }
 });

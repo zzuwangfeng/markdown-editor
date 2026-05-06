@@ -29,6 +29,14 @@
           </button>
         </div>
         <div class="sidebar-actions">
+          <button class="icon-btn" id="btn-refresh" title="刷新 (Cmd+R)">
+            <svg class="refresh-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path class="refresh-arrow-top" d="M8 2V1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <path class="refresh-circle-top" d="M3 8a5 5 0 1 1 5 5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+              <path class="refresh-arrow-bottom" d="M8 14v-1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <path class="refresh-circle-bottom" d="M13 8a5 5 0 1 1-5-5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+            </svg>
+          </button>
           <div class="add-dropdown" id="add-dropdown">
             <button class="icon-btn" id="btn-add" title="添加">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -61,17 +69,6 @@
         </div>
       </div>
       <div class="workspace-name" id="workspace-name">未选择工作区</div>
-      <!-- 搜索框 -->
-      <div class="sidebar-search" id="sidebar-search">
-        <svg class="sidebar-search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none">
-          <circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.1"/>
-          <path d="M9.5 9.5l3 3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
-        </svg>
-        <input type="text" class="sidebar-search-input" id="sidebar-search-input" placeholder="搜索文件...">
-        <button class="sidebar-search-close" id="sidebar-search-close" style="display: none;">×</button>
-      </div>
-      <!-- 搜索结果 -->
-      <div class="sidebar-search-results" id="sidebar-search-results"></div>
       <!-- 文件列表 -->
       <div class="file-tree" id="file-tree">
         <div class="empty-state" id="empty-state">
@@ -247,7 +244,7 @@
     <div class="slash-list" id="slash-list"></div>
   </div>
 
-  <!-- 搜索面板 -->
+  <!-- 搜索面板 - 文档内搜索 -->
   <div class="search-panel" id="search-panel">
     <div class="search-header">
       <input type="text" class="search-input" id="search-input" placeholder="搜索文档内容...">
@@ -379,6 +376,27 @@
   <!-- 图片插入进度 -->
   <div class="image-progress" id="image-progress">
     <div class="image-progress-text">正在插入图片...</div>
+  </div>
+
+  <!-- 项目搜索面板 -->
+  <div class="search-panel project-search" id="search-panel-project">
+    <div class="search-panel-header">
+      <div class="search-panel-input-wrapper">
+        <svg class="search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.1"/>
+          <path d="M9.5 9.5l3 3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+        </svg>
+        <input type="text" class="search-input" id="search-input-project" placeholder="在文件中搜索...">
+        <button class="search-clear" id="search-clear" style="display: none;">×</button>
+      </div>
+      <button class="search-close" id="search-close-project">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+    <div class="search-panel-info" id="search-info-project"></div>
+    <div class="search-panel-results" id="search-results-project"></div>
   </div>
 
   <!-- 关于对话框 - macOS 风格 -->

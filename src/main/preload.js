@@ -15,6 +15,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   createDirectory: (dirPath) => ipcRenderer.invoke('create-directory', dirPath),
   showItemInFolder: (itemPath) => ipcRenderer.invoke('show-item-in-folder', itemPath),
   selectImage: () => ipcRenderer.invoke('select-image'),
+  // 项目全文搜索
+  searchProject: (workspace, query, options) => ipcRenderer.invoke('search-project', workspace, query, options),
   // 监听菜单事件
   onMenuEvent: (callback) => ipcRenderer.on('menu-event', (event, action) => callback(action))
 });
