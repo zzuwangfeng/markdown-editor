@@ -6,6 +6,50 @@ const fs = require('fs');
 let mainWindow;
 let currentWorkspace = null;
 
+/**
+ * 递归读取目录，返回排序后的子项数组（包含嵌套children）
+ */
+async function readDirRecursive(dirPath) {
+  try {
+    const items = await fs.promises.readdir(dirPath, { withFileTypes: true });
+    const result = [];
+
+    for (const item of items) {
+      if (item.name.startsWith('.')) continue;
+
+      const fullPath = path.join(dirPath, item.name);
+
+      if (item.isDirectory()) {
+        const children = await readDirRecursive(fullPath);
+        result.push({
+          name: item.name,
+          path: fullPath,
+          isDirectory: true,
+          children: children
+        });
+      } else if (item.name.endsWith('.md')) {
+        result.push({
+          name: item.name,
+          path: fullPath,
+          isDirectory: false,
+          children: null
+        });
+      }
+    }
+
+    // 排序：文件夹在前，文件在后
+    result.sort((a, b) => {
+      if (a.isDirectory && !b.isDirectory) return -1;
+      if (!a.isDirectory && b.isDirectory) return 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    return result;
+  } catch (e) {
+    return [];
+  }
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -149,19 +193,30 @@ ipcMain.handle('read-directory', async (event, dirPath) => {
       if (isDirectory) {
         try {
           const subItems = await fs.promises.readdir(fullPath, { withFileTypes: true });
-          const mapped = subItems
-            .filter(subItem => {
-              // 跳过隐藏文件
-              if (subItem.name.startsWith('.')) return false;
-              if (subItem.isDirectory()) return true;
-              return subItem.name.endsWith('.md');
-            })
-            .map(subItem => ({
-              name: subItem.name,
-              path: path.join(fullPath, subItem.name),
-              isDirectory: subItem.isDirectory()
-            }));
-          // 子目录也要排序：文件夹在前，文件在后
+          const mapped = [];
+          for (const subItem of subItems) {
+            // 跳过隐藏文件
+            if (subItem.name.startsWith('.')) continue;
+            if (subItem.isDirectory()) {
+              // 递归读取子目录
+              const subDirPath = path.join(fullPath, subItem.name);
+              const subChildren = await readDirRecursive(subDirPath);
+              mapped.push({
+                name: subItem.name,
+                path: subDirPath,
+                isDirectory: true,
+                children: subChildren
+              });
+            } else if (subItem.name.endsWith('.md')) {
+              mapped.push({
+                name: subItem.name,
+                path: path.join(fullPath, subItem.name),
+                isDirectory: false,
+                children: null
+              });
+            }
+          }
+          // 子目录排序：文件夹在前，文件在后
           mapped.sort((a, b) => {
             if (a.isDirectory && !b.isDirectory) return -1;
             if (!a.isDirectory && b.isDirectory) return 1;

@@ -1318,10 +1318,8 @@
 
     // 排序：文件夹在前，文件在后，按名字排序
     items.sort((a, b) => {
-      // 文件夹优先
       if (a.isDirectory && !b.isDirectory) return -1;
       if (!a.isDirectory && b.isDirectory) return 1;
-      // 同类型按名字排序
       return a.name.localeCompare(b.name);
     });
 
@@ -1330,27 +1328,53 @@
       fileTree.appendChild(el);
     });
 
-    // 恢复展开状态
+    // 恢复展开状态 - 递归展开所有已展开的文件夹
     previousExpanded.forEach(path => {
-      const treeItem = document.querySelector(`[data-path="${CSS.escape(path)}"]`);
-      if (treeItem) {
-        const children = treeItem.querySelector('.tree-children');
-        const expandBtn = treeItem.querySelector('.tree-item-expand');
-        if (children && expandBtn) {
-          // 确保子项已加载
-          const item = findItemByPath(items, path);
-          if (item && item.children && item.children.length > 0) {
-            children.innerHTML = '';
-            item.children.forEach(child => {
-              children.appendChild(createTreeItem(child, 1));
-            });
-          }
-          children.style.display = 'block';
-          expandBtn.dataset.expanded = 'true';
-          expandBtn.classList.add('expanded');
+      restoreFolderExpansion(items, path, 0);
+    });
+  }
+
+  /**
+   * 递归恢复文件夹展开状态
+   */
+  function restoreFolderExpansion(items, targetPath, level) {
+    const item = findItemByPath(items, targetPath);
+    if (!item) return;
+
+    const treeItem = document.querySelector(`[data-path="${CSS.escape(targetPath)}"]`);
+    if (!treeItem) return;
+
+    const children = treeItem.querySelector('.tree-children');
+    const expandBtn = treeItem.querySelector('.tree-item-expand');
+
+    if (children && expandBtn && item.isDirectory) {
+      // 排序子项
+      if (item.children && item.children.length > 0) {
+        item.children.sort((a, b) => {
+          if (a.isDirectory && !b.isDirectory) return -1;
+          if (!a.isDirectory && b.isDirectory) return 1;
+          return a.name.localeCompare(b.name);
+        });
+
+        children.innerHTML = '';
+        item.children.forEach(child => {
+          children.appendChild(createTreeItem(child, level + 1));
+        });
+
+        // 如果这个文件夹也在previousExpanded中，递归展开它的子文件夹
+        if (expandedFolders.has(item.path)) {
+          item.children.forEach(child => {
+            if (child.isDirectory && expandedFolders.has(child.path)) {
+              restoreFolderExpansion(items, child.path, level + 1);
+            }
+          });
         }
       }
-    });
+
+      children.style.display = 'block';
+      expandBtn.dataset.expanded = 'true';
+      expandBtn.classList.add('expanded');
+    }
   }
 
   /**
@@ -1433,7 +1457,7 @@
         const empty = document.createElement('div');
         empty.className = 'tree-empty';
         empty.textContent = '空文件夹';
-        empty.style.cssText = 'color: var(--text-placeholder); font-size: 12px; padding: 4px 8px;';
+        empty.style.cssText = 'color: var(--text-placeholder); font-size: 12px; padding: 4px 8px 4px 24px;';
         children.appendChild(empty);
       }
       children.style.display = 'block';

@@ -273,22 +273,52 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: transparent;
+  background: #F3F4F6;
   border: none;
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
+  border-radius: 6px;
+  color: var(--accent);
   cursor: pointer;
-  transition: background var(--transition), color var(--transition);
+  transition: all 0.2s ease;
 }
 
 .icon-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
+  background: var(--accent);
+  color: #fff;
+  transform: scale(1.08);
+}
+
+.icon-btn:active {
+  transform: scale(0.95);
 }
 
 .icon-btn.active {
-  background: var(--accent-light);
+  background: var(--accent);
+  color: #fff;
+}
+
+/* 刷新按钮 - 圆形扁平风格 */
+.btn-refresh {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #F3F4F6;
+  border: none;
+  border-radius: 6px;
   color: var(--accent);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-refresh:hover {
+  background: var(--accent);
+  color: #fff;
+  transform: scale(1.08);
+}
+
+.btn-refresh:active {
+  transform: scale(0.95);
 }
 
 /* 刷新按钮动画 */
@@ -299,6 +329,10 @@ body {
 
 .refresh-icon {
   transition: transform 0.2s ease;
+}
+
+.refresh-icon.spinning {
+  animation: refresh-spin 0.6s ease-in-out;
 }
 
 .refresh-icon.spinning {
@@ -576,22 +610,27 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: transparent;
+  background: #F3F4F6;
   border: none;
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
+  border-radius: 6px;
+  color: var(--accent);
   cursor: pointer;
-  transition: all var(--transition);
+  transition: all 0.2s ease;
 }
 
 .toolbar .toolbar-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
+  background: var(--accent);
+  color: #fff;
+  transform: scale(1.08);
+}
+
+.toolbar .toolbar-btn:active {
+  transform: scale(0.95);
 }
 
 .toolbar .toolbar-btn.active {
-  background: var(--accent-light);
-  color: var(--accent);
+  background: var(--accent);
+  color: #fff;
 }
 
 /* 视图切换 */
@@ -1362,22 +1401,28 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: transparent;
+  background: #F3F4F6;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: 6px;
   font-size: 13px;
-  color: var(--text-primary);
+  color: var(--accent);
   cursor: pointer;
-  transition: background var(--transition);
+  transition: all 0.2s ease;
 }
 
 .toolbar-btn:hover {
-  background: var(--bg-hover);
+  background: var(--accent);
+  color: #fff;
+  transform: scale(1.08);
+}
+
+.toolbar-btn:active {
+  transform: scale(0.95);
 }
 
 .toolbar-btn.active {
-  background: var(--accent-light);
-  color: var(--accent);
+  background: var(--accent);
+  color: #fff;
 }
 
 .toolbar-btn code {
