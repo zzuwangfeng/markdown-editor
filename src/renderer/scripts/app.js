@@ -1706,6 +1706,18 @@
 
     currentFilePath = item.path;
     currentFileName = item.name;
+
+    // 更新文件头部标题：优先读取文件中的 H1 标题，否则使用文件名
+    const fileHeaderTitle = document.getElementById('file-header-title');
+    if (fileHeaderTitle) {
+      const h1Match = content.match(/^#\s+(.+)$/m);
+      if (h1Match) {
+        fileHeaderTitle.textContent = h1Match[1];
+      } else {
+        fileHeaderTitle.textContent = item.name.replace(/\.md$/, '');
+      }
+    }
+
     currentFileContent = content;
 
     const stat = await window.electronAPI.getFileStat(item.path);
@@ -1739,6 +1751,17 @@
 
     const content = await window.electronAPI.readFile(filePath);
     currentFileContent = content;
+
+    // 更新文件头部标题：优先读取文件中的 H1 标题，否则使用文件名
+    const fileHeaderTitle = document.getElementById('file-header-title');
+    if (fileHeaderTitle) {
+      const h1Match = content.match(/^#\s+(.+)$/m);
+      if (h1Match) {
+        fileHeaderTitle.textContent = h1Match[1];
+      } else {
+        fileHeaderTitle.textContent = fileName.replace(/\.md$/, '');
+      }
+    }
 
     const stat = await window.electronAPI.getFileStat(filePath);
     lastModifiedTime = stat ? stat.mtime : Date.now();
