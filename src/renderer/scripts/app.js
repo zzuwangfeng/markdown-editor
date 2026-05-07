@@ -206,9 +206,8 @@
     if (savedPreview === 'true') {
       isPreviewMode = true;
       previewContent.classList.remove('hidden');
-    } else {
-      previewContent.classList.add('hidden');
     }
+    // HTML 默认 hidden，不需要再添加
 
     // 恢复目录大纲设置
     const savedOutline = localStorage.getItem('flowmark-outline-enabled');
@@ -1695,8 +1694,12 @@
 
     // 加载并显示文件内容
     const content = await window.electronAPI.readFile(item.path);
+    console.log('handleTreeItemClick - content:', content.substring(0, 300));
+    // 转换图片路径为绝对路径
+    const processedContent = convertImagePathsToAbsolute(content, currentWorkspace);
+    console.log('handleTreeItemClick - processedContent:', processedContent.substring(0, 300));
     if (editor) {
-      editor.innerHTML = markdownToHtml(content);
+      editor.innerHTML = markdownToHtml(processedContent);
       editor.contentEditable = 'true';
       editor.style.opacity = '1';
       editor.style.pointerEvents = 'auto';
@@ -1757,6 +1760,13 @@
     const content = await window.electronAPI.readFile(filePath);
     currentFileContent = content;
 
+    console.log('loadFile - read from disk:', content.substring(0, 300));
+
+    // 转换图片路径为绝对路径
+    const processedContent = convertImagePathsToAbsolute(content, currentWorkspace);
+
+    console.log('loadFile - processedContent:', processedContent.substring(0, 300));
+
     // 更新文件头部标题：优先读取文件中的 H1 标题，否则使用文件名
     const fileHeaderTitle = document.getElementById('file-header-title');
     if (fileHeaderTitle) {
@@ -1778,7 +1788,7 @@
     // 启用编辑器
     enableEditor();
 
-    editor.innerHTML = markdownToHtml(content);
+    editor.innerHTML = markdownToHtml(processedContent);
     editorPlaceholder.style.display = content ? 'none' : 'block';
 
     // 同步侧边栏选中状态
@@ -1836,13 +1846,44 @@
   }
 
   /**
+   * 将图片路径转换回相对路径（用于保存到 md 文件）
+   * file:///workspace/.flowmark-assets/xxx.png -> .flowmark-assets/xxx.png
+   */
+  function convertImagePathsToRelative(content, workspace) {
+    if (!workspace) return content;
+
+    // 匹配任何 file:// 路径中包含 .flowmark-assets 的图片，转换为相对路径
+    content = content.replace(
+      /!\[([^\]]*)\]\(file:\/\/[^)]*\.flowmark-assets\/([^)]+)\)/g,
+      (match, alt, path) => {
+        return `![${alt}](.flowmark-assets/${path})\n`;
+      }
+    );
+
+    // 清理末尾多余换行
+    content = content.replace(/\n+$/, '\n');
+
+    return content;
+  }
+
+  /**
    * 保存当前文件
    */
   async function saveCurrentFile() {
     if (!currentFilePath) return;
 
     isSaving = true;
-    const content = htmlToMarkdown(editor.innerHTML);
+    let content = htmlToMarkdown(editor.innerHTML);
+
+    console.log('saveCurrentFile - htmlToMarkdown result:', content.substring(0, 300));
+
+    // 将图片绝对路径转换回相对路径再保存
+    if (currentWorkspace) {
+      content = convertImagePathsToRelative(content, currentWorkspace);
+    }
+
+    console.log('saveCurrentFile - final content:', content.substring(0, 300));
+
     const success = await window.electronAPI.writeFile(currentFilePath, content);
 
     if (success) {
@@ -1873,21 +1914,23 @@
    * 处理编辑器输入
    */
   function handleEditorInput() {
-    editorPlaceholder.style.display = editor.innerHTML ? 'none' : 'block';
-    updateStats();
-    debouncedUpdateOutline();
-    calculateReadingProgress();
+    try {
+      editorPlaceholder.style.display = editor.innerHTML ? 'none' : 'block';
+      updateStats();
+      debouncedUpdateOutline();
+      calculateReadingProgress();
 
-    // 实时预览（防抖）
-    debouncedRenderPreview();
+      debouncedRenderPreview();
 
-    // 自动保存（防抖）
-    if (saveTimeout) clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(() => {
-      if (currentFilePath) {
-        saveCurrentFile();
-      }
-    }, 1500);
+      if (saveTimeout) clearTimeout(saveTimeout);
+      saveTimeout = setTimeout(() => {
+        if (currentFilePath) {
+          saveCurrentFile();
+        }
+      }, 1500);
+    } catch (e) {
+      console.error('Error in handleEditorInput:', e);
+    }
   }
 
   /**
@@ -2124,6 +2167,7 @@
    * 在光标位置插入 HTML
    */
   function insertHTMLAtCursor(html) {
+    const scrollTopBefore = editor.scrollTop;
     editor.focus();
     const selection = window.getSelection();
     if (!selection.rangeCount) {
@@ -2157,6 +2201,11 @@
     }
 
     handleEditorInput();
+
+    // 异步恢复滚动位置，确保在所有DOM操作完成后执行
+    requestAnimationFrame(() => {
+      editor.scrollTop = scrollTopBefore;
+    });
   }
 
   /**
@@ -2323,7 +2372,8 @@
     const fileName = generateImageFileName(imagePath);
     const destPath = assetsFolderPath + '/' + fileName;
     await window.electronAPI.copyFile(imagePath, destPath);
-    return '.flowmark-assets/' + fileName;
+    // 返回 file:// 绝对路径，让 Electron 可以正确加载图片
+    return 'file://' + assetsFolderPath + '/' + fileName;
   }
 
   /**
@@ -2472,8 +2522,9 @@
       const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
 
       await window.electronAPI.writeImageFile(assetsFolderPath, fileName, base64);
-      const relativePath = '.flowmark-assets/' + fileName;
-      const html = `<img src="${relativePath}" alt="${fileName}" class="md-image">`;
+      // 返回 file:// 绝对路径
+      const imagePath = 'file://' + assetsFolderPath + '/' + fileName;
+      const html = `<img src="${imagePath}" alt="${fileName}" class="md-image">`;
 
       insertHTMLAtCursor(html);
     } catch (e) {
@@ -2960,10 +3011,33 @@
   // ========================================
 
   /**
+   * 将 md 内容中的相对图片路径转换为绝对 file:// 路径
+   */
+  function convertImagePathsToAbsolute(content, workspace) {
+    if (!workspace) return content;
+
+    // 规范化路径：去除末尾斜杠
+    const normalizedWorkspace = workspace.replace(/\/$/, '');
+
+    // 匹配相对路径 .flowmark-assets/ 开头的图片，转换为绝对路径
+    content = content.replace(/!\[([^\]]*)\]\(\.flowmark-assets\/([^)]+)\)/g,
+      (match, alt, path) => {
+        return `![${alt}](file://${normalizedWorkspace}/.flowmark-assets/${path})`;
+      });
+
+    return content;
+  }
+
+  /**
    * Markdown 转 HTML
    */
   function markdownToHtml(md) {
-    if (!md) return '';
+    if (!md) {
+      console.log('markdownToHtml - input is empty');
+      return '';
+    }
+
+    console.log('markdownToHtml - input:', md.substring(0, 300));
 
     let html = md;
 
@@ -3030,14 +3104,14 @@
     html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
     html = html.replace(/_([^_]+)_/g, '<em>$1</em>');
 
-    // 删除线
-    html = html.replace(/~~([^~]+)~~/g, '<s>$1</s>');
+    // 删除线 - 使用更宽松的匹配
+    html = html.replace(/~~([^~]*)~~/g, '<s>$1</s>');
+
+    // 图片 - 必须在链接之前处理！防止 ! 被误识别为普通文本
+    html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" class="md-image">');
 
     // 链接
     html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
-
-    // 图片
-    html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" class="md-image">');
 
     // 水平线
     html = html.replace(/^---$/gm, '<hr>');
@@ -3054,7 +3128,12 @@
     html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
 
     // 段落处理 - 先按双换行分割
+    console.log('Before paragraph split, html:', html.substring(0, 300));
     const paragraphs = html.split(/\n{2,}/);
+    console.log('Paragraphs count:', paragraphs.length);
+    for (let i = 0; i < paragraphs.length; i++) {
+      console.log(`Paragraph ${i}:`, paragraphs[i].substring(0, 100));
+    }
     html = paragraphs.map(p => {
       p = p.trim();
       if (!p) return '';
@@ -3079,6 +3158,8 @@
     // 清理
     html = html.replace(/<p><\/p>/g, '');
     html = html.replace(/<br><br>/g, '<br>');
+
+    console.log('markdownToHtml - output:', html.substring(0, 300));
 
     return html;
   }
@@ -3133,7 +3214,12 @@
    * HTML 转 Markdown
    */
   function htmlToMarkdown(html) {
-    if (!html) return '';
+    if (!html) {
+      console.log('htmlToMarkdown - input is empty');
+      return '';
+    }
+
+    console.log('htmlToMarkdown - input:', html.substring(0, 300));
 
     let md = html;
 
@@ -3210,6 +3296,8 @@
     // 清理
     md = md.replace(/\n{3,}/g, '\n\n');
     md = md.trim();
+
+    console.log('htmlToMarkdown - output:', md.substring(0, 300));
 
     return md;
   }
