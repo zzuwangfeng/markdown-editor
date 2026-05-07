@@ -19,6 +19,7 @@
   let lastModifiedTime = null;       // 文件最后修改时间（用于检测外部修改）
   let fileWatcherInterval = null;    // 文件监控定时器
   let assetsFolderPath = null;       // 图片资源文件夹路径
+  let savedWorkspaceTree = null;     // 持久化的完整目录树
   let isPreviewMode = false;         // 是否启用实时预览
   let isOutlineEnabled = false;       // 是否启用目录大纲
   let isReadingMode = false;         // 是否启用阅读模式
@@ -26,6 +27,7 @@
   let currentFontSize = 16;          // 当前字体大小
   let currentView = 'edit';          // 当前视图模式：edit/preview/both
   let currentTheme = 'light';        // 当前主题：light/dark/sepia
+  let expandedFolders = new Set();   // 记录已展开的文件夹路径
 
   // ========================================
   // DOM 元素引用 - 在 init() 中初始化
@@ -245,6 +247,176 @@
     if (savedView) {
       setViewMode(savedView);
     }
+
+    // 恢复持久化的工作区
+    restorePersistentWorkspace();
+  }
+
+  /**
+   * 保存工作区到 localStorage
+   */
+  async function saveWorkspaceToStorage() {
+    if (!currentWorkspace) return;
+
+    try {
+      // 重新读取完整目录树（包含所有嵌套）
+      const items = await window.electronAPI.readDirectory(currentWorkspace);
+      savedWorkspaceTree = items;
+
+      // 保存工作区路径
+      localStorage.setItem('flowmark-workspace-path', currentWorkspace);
+
+      // 保存完整目录树（序列化）
+      localStorage.setItem('flowmark-workspace-tree', JSON.stringify(items));
+
+      // 保存展开状态
+      localStorage.setItem('flowmark-expanded-folders', JSON.stringify([...expandedFolders]));
+    } catch (e) {
+      console.error('保存工作区失败:', e);
+    }
+  }
+
+  /**
+   * 从 localStorage 恢复工作区
+   */
+  async function restorePersistentWorkspace() {
+    const savedPath = localStorage.getItem('flowmark-workspace-path');
+    const savedTree = localStorage.getItem('flowmark-workspace-tree');
+    const savedExpanded = localStorage.getItem('flowmark-expanded-folders');
+
+    if (!savedPath) {
+      return;
+    }
+
+    // 解析保存的目录树
+    let items;
+    if (savedTree) {
+      try {
+        items = JSON.parse(savedTree);
+      } catch (e) {
+        items = null;
+      }
+    }
+
+    // 验证路径是否存在（通过尝试读取目录）
+    try {
+      const freshItems = await window.electronAPI.readDirectory(savedPath);
+      if (freshItems && freshItems.length >= 0) {
+        currentWorkspace = savedPath;
+        savedWorkspaceTree = freshItems;
+        assetsFolderPath = savedPath + '/.flowmark-assets';
+
+        // 恢复工作区名称
+        workspaceName.textContent = savedPath.split(/[\\/]/).pop() || savedPath;
+        workspaceName.title = savedPath; // 悬停显示完整路径
+        emptyState.style.display = 'none';
+
+        // 恢复展开状态
+        if (savedExpanded) {
+          try {
+            expandedFolders = new Set(JSON.parse(savedExpanded));
+          } catch (e) {
+            expandedFolders = new Set();
+          }
+        }
+
+        // 使用最新数据构建目录树（同时保持展开状态）
+        renderFileTreeFromData(freshItems);
+
+        // 启动文件监控
+        startFileWatcher();
+
+        return;
+      }
+    } catch (e) {
+      console.error('恢复工作区失败，清除缓存:', e);
+    }
+
+    // 如果恢复失败，清除缓存
+    clearWorkspaceStorage();
+  }
+
+  /**
+   * 清除工作区缓存
+   */
+  function clearWorkspaceStorage() {
+    localStorage.removeItem('flowmark-workspace-path');
+    localStorage.removeItem('flowmark-workspace-tree');
+    localStorage.removeItem('flowmark-expanded-folders');
+    savedWorkspaceTree = null;
+    currentWorkspace = null;
+  }
+
+  /**
+   * 从数据渲染文件树（用于恢复缓存的工作区）
+   */
+  function renderFileTreeFromData(items) {
+    fileTree.innerHTML = '';
+
+    if (!items || items.length === 0) {
+      fileTree.innerHTML = '<div class="empty-state"><p>工作区为空</p></div>';
+      return;
+    }
+
+    // 排序
+    items.sort((a, b) => {
+      if (a.isDirectory && !b.isDirectory) return -1;
+      if (!a.isDirectory && b.isDirectory) return 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    items.forEach(item => {
+      const el = createTreeItem(item);
+      fileTree.appendChild(el);
+    });
+
+    // 恢复展开状态
+    expandedFolders.forEach(path => {
+      restoreFolderExpansionFromCache(items, path, 0);
+    });
+  }
+
+  /**
+   * 从缓存数据恢复文件夹展开状态
+   */
+  function restoreFolderExpansionFromCache(items, targetPath, level) {
+    const item = findItemByPath(items, targetPath);
+    if (!item) return;
+
+    const treeItem = document.querySelector(`[data-path="${CSS.escape(targetPath)}"]`);
+    if (!treeItem) return;
+
+    const children = treeItem.querySelector('.tree-children');
+    const expandBtn = treeItem.querySelector('.tree-item-expand');
+
+    if (children && expandBtn && item.isDirectory) {
+      // 排序子项
+      if (item.children && item.children.length > 0) {
+        item.children.sort((a, b) => {
+          if (a.isDirectory && !b.isDirectory) return -1;
+          if (!a.isDirectory && b.isDirectory) return 1;
+          return a.name.localeCompare(b.name);
+        });
+
+        children.innerHTML = '';
+        item.children.forEach(child => {
+          children.appendChild(createTreeItem(child, level + 1));
+        });
+
+        // 如果这个文件夹也在expandedFolders中，递归展开
+        if (expandedFolders.has(item.path)) {
+          item.children.forEach(child => {
+            if (child.isDirectory && expandedFolders.has(child.path)) {
+              restoreFolderExpansionFromCache(items, child.path, level + 1);
+            }
+          });
+        }
+      }
+
+      children.style.display = 'block';
+      expandBtn.dataset.expanded = 'true';
+      expandBtn.classList.add('expanded');
+    }
   }
 
   // ========================================
@@ -417,14 +589,16 @@
     });
 
     // 视图切换
-    viewSwitch.querySelectorAll('.view-btn').forEach(btn => {
-      btn.addEventListener('click', () => setViewMode(btn.dataset.view));
-    });
+    if (viewSwitch) {
+      viewSwitch.querySelectorAll('.view-btn').forEach(btn => {
+        btn.addEventListener('click', () => setViewMode(btn.dataset.view));
+      });
+    }
 
     // 搜索面板事件
-    searchInput.addEventListener('input', debounce(handleProjectSearch, 300));
-    searchClear.addEventListener('click', clearProjectSearch);
-    searchClose.addEventListener('click', hideSearchPanel);
+    if (searchInput) searchInput.addEventListener('input', debounce(handleProjectSearch, 300));
+    if (searchClear) searchClear.addEventListener('click', clearProjectSearch);
+    if (searchClose) searchClose.addEventListener('click', hideSearchPanel);
   }
 
   /**
@@ -1031,6 +1205,8 @@
       await ensureAssetsFolder();
       await refreshFileTree();
       startFileWatcher();
+      // 保存工作区到 localStorage
+      await saveWorkspaceToStorage();
     }
   }
 
@@ -1296,9 +1472,6 @@
   // 文件树管理
   // ========================================
 
-  // 记录已展开的文件夹路径
-  let expandedFolders = new Set();
-
   /**
    * 刷新文件树（保持展开状态）
    */
@@ -1309,6 +1482,7 @@
     const previousExpanded = new Set(expandedFolders);
 
     const items = await window.electronAPI.readDirectory(currentWorkspace);
+    savedWorkspaceTree = items;
     fileTree.innerHTML = '';
 
     if (items.length === 0) {
@@ -1332,6 +1506,9 @@
     previousExpanded.forEach(path => {
       restoreFolderExpansion(items, path, 0);
     });
+
+    // 保存工作区状态
+    await saveWorkspaceToStorage();
   }
 
   /**
@@ -1473,6 +1650,9 @@
       // 移除展开状态
       expandedFolders.delete(item.path);
     }
+
+    // 保存展开状态
+    localStorage.setItem('flowmark-expanded-folders', JSON.stringify([...expandedFolders]));
   }
 
   /**
