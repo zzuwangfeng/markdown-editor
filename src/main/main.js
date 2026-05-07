@@ -134,6 +134,8 @@ function createMenu() {
         { label: '缩小', accelerator: 'Cmd+-', role: 'zoomOut' },
         { label: '重置缩放', accelerator: 'Cmd+0', role: 'resetZoom' },
         { type: 'separator' },
+        { label: '开发者工具', accelerator: 'Cmd+Option+I', role: 'toggleDevTools' },
+        { type: 'separator' },
         { label: '切换全屏', accelerator: 'Ctrl+Cmd+F', role: 'togglefullscreen' }
       ]
     },

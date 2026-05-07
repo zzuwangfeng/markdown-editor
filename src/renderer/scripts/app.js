@@ -259,18 +259,15 @@
     if (!currentWorkspace) return;
 
     try {
-      // 重新读取完整目录树（包含所有嵌套）
-      const items = await window.electronAPI.readDirectory(currentWorkspace);
-      savedWorkspaceTree = items;
-
-      // 保存工作区路径
+      // 只保存工作区路径和展开状态，不保存整个目录树
       localStorage.setItem('flowmark-workspace-path', currentWorkspace);
-
-      // 保存完整目录树（序列化）
-      localStorage.setItem('flowmark-workspace-tree', JSON.stringify(items));
 
       // 保存展开状态
       localStorage.setItem('flowmark-expanded-folders', JSON.stringify([...expandedFolders]));
+
+      // 移除目录树缓存，避免 localStorage 超出限制
+      localStorage.removeItem('flowmark-workspace-tree');
+      savedWorkspaceTree = null;
     } catch (e) {
       console.error('保存工作区失败:', e);
     }
@@ -281,29 +278,18 @@
    */
   async function restorePersistentWorkspace() {
     const savedPath = localStorage.getItem('flowmark-workspace-path');
-    const savedTree = localStorage.getItem('flowmark-workspace-tree');
     const savedExpanded = localStorage.getItem('flowmark-expanded-folders');
 
     if (!savedPath) {
       return;
     }
 
-    // 解析保存的目录树
-    let items;
-    if (savedTree) {
-      try {
-        items = JSON.parse(savedTree);
-      } catch (e) {
-        items = null;
-      }
-    }
-
     // 验证路径是否存在（通过尝试读取目录）
     try {
-      const freshItems = await window.electronAPI.readDirectory(savedPath);
-      if (freshItems && freshItems.length >= 0) {
+      const items = await window.electronAPI.readDirectory(savedPath);
+      if (items && items.length >= 0) {
         currentWorkspace = savedPath;
-        savedWorkspaceTree = freshItems;
+        savedWorkspaceTree = items;
         assetsFolderPath = savedPath + '/.flowmark-assets';
 
         // 恢复工作区名称
@@ -320,8 +306,8 @@
           }
         }
 
-        // 使用最新数据构建目录树（同时保持展开状态）
-        renderFileTreeFromData(freshItems);
+        // 使用最新数据构建目录树
+        renderFileTreeFromData(items);
 
         // 启动文件监控
         startFileWatcher();
@@ -453,9 +439,11 @@
     // 编辑器输入事件
     if (editor) {
       editor.addEventListener('input', handleEditorInput);
-      editor.addEventListener('keyup', handleEditorKeyup);
+      editor.addEventListener('keyup', (e) => {
+        handleEditorKeyup(e);
+        handleSelectionChange();
+      });
       editor.addEventListener('mouseup', handleSelectionChange);
-      editor.addEventListener('keyup', handleSelectionChange);
       editor.addEventListener('paste', handlePaste);
       editor.addEventListener('drop', handleDrop);
       editor.addEventListener('dragover', handleDragOver);
@@ -595,9 +583,9 @@
       });
     }
 
-    // 搜索面板事件
-    if (searchInput) searchInput.addEventListener('input', debounce(handleProjectSearch, 300));
-    if (searchClear) searchClear.addEventListener('click', clearProjectSearch);
+    // 搜索面板事件 (文档内搜索)
+    if (searchInput) searchInput.addEventListener('input', debounce(handleSearchInput, 300));
+    if (searchClear) searchClear.addEventListener('click', clearSearch);
     if (searchClose) searchClose.addEventListener('click', hideSearchPanel);
   }
 
@@ -611,6 +599,15 @@
       timeout = setTimeout(() => func.apply(this, args), wait);
     };
   }
+
+  // 防抖版本的函数
+  const debouncedRenderPreview = debounce(() => {
+    if (isPreviewMode) renderPreview();
+  }, 300);
+
+  const debouncedUpdateOutline = debounce(() => {
+    updateOutline();
+  }, 300);
 
   /**
    * 处理项目搜索输入
@@ -737,6 +734,14 @@
     searchClearProject.style.display = 'none';
     searchInfoProject.textContent = '';
     searchResultsProject.innerHTML = '';
+  }
+
+  /**
+   * 清除文档内搜索
+   */
+  function clearSearch() {
+    if (searchInput) searchInput.value = '';
+    if (searchResults) searchResults.innerHTML = '';
   }
 
   /**
@@ -1870,13 +1875,11 @@
   function handleEditorInput() {
     editorPlaceholder.style.display = editor.innerHTML ? 'none' : 'block';
     updateStats();
-    updateOutline();
+    debouncedUpdateOutline();
     calculateReadingProgress();
 
-    // 实时预览
-    if (isPreviewMode) {
-      renderPreview();
-    }
+    // 实时预览（防抖）
+    debouncedRenderPreview();
 
     // 自动保存（防抖）
     if (saveTimeout) clearTimeout(saveTimeout);
@@ -2784,12 +2787,23 @@
     const chars = text.replace(/\s/g, '').length;
     wordCount.textContent = `${chars} 字`;
 
-    // 计算行号
-    const content = editor.innerHTML;
-    const lineBreaks = (content.match(/<br\s*\/?>/gi) || []).length;
-    const paragraphs = (content.match(/<\/(p|h\d|blockquote|li|div)>/gi) || []).length;
-    const currentLine = Math.min(paragraphs + lineBreaks + 1, 1);
-    lineInfo.textContent = `行 ${currentLine || 1}`;
+    // 计算当前行号：获取光标位置
+    let currentLine = 1;
+    const selection = window.getSelection();
+    if (selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      const preCaretRange = range.cloneRange();
+      preCaretRange.selectNodeContents(editor);
+      preCaretRange.setEnd(range.startContainer, range.startOffset);
+      const temp = document.createElement('div');
+      temp.appendChild(preCaretRange.cloneContents());
+      const divContent = temp.innerHTML;
+      // 计算 <br> 和块级标签来估算行号
+      const lineBreaks = (divContent.match(/<br\s*\/?>/gi) || []).length;
+      const blockTags = (divContent.match(/<\/(p|h[1-6]|blockquote|li|div)>/gi) || []).length;
+      currentLine = lineBreaks + blockTags + 1;
+    }
+    lineInfo.textContent = `行 ${currentLine}`;
   }
 
   // ========================================
@@ -3002,7 +3016,7 @@
     // 行内代码
     html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
 
-    // 标题
+    // 标题 - 必须在列表之前处理！
     html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
     html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
     html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
@@ -3033,22 +3047,30 @@
     // 引用
     html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
 
-    // 无序列表
+    // 无序列表 - 必须在段落处理之前
     html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
-    html = consolidateLists(html, 'ul');
 
     // 有序列表
     html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
-    html = consolidateLists(html, 'ol');
 
-    // 段落 - 先按双换行分割，然后处理单换行
+    // 段落处理 - 先按双换行分割
     const paragraphs = html.split(/\n{2,}/);
     html = paragraphs.map(p => {
       p = p.trim();
       if (!p) return '';
 
       // 如果已经是块级标签，不处理
-      if (p.match(/^<(h[1-6]|blockquote|pre|ul|ol|li|hr|div|table)/i)) return p;
+      if (p.match(/^<(h[1-6]|blockquote|pre|ul|ol|li|hr|div|table)/i)) {
+        // 合并连续的 <li>...</li> 为 <ul>/<ol>
+        p = p.replace(/(<li>[^<]*<\/li>)(\s*<li>[^<]*<\/li>)+/g, (match) => {
+          return `<ul>${match}</ul>`;
+        });
+        // 包裹单独的 <li> 在 <ul> 中
+        p = p.replace(/(<li>[^<]*<\/li>)(?!\s*<li>)/g, (match) => {
+          return `<ul>${match}</ul>`;
+        });
+        return p;
+      }
 
       // 否则包装成段落，单换行转<br>
       return `<p>${p.replace(/\n/g, '<br>')}</p>`;
@@ -3077,36 +3099,34 @@
   }
 
   /**
-   * 合并列表项
+   * 合并连续的无序列表项
    */
   function consolidateLists(html, type) {
+    // 保持向后兼容
+    return html;
+  }
+
+  /**
+   * 合并连续的 <li> 标签为 <ul>/<ol>
+   * 只处理连续的 <li>...</li><li>...</li> 模式
+   */
+  function consolidateListItems(html, type) {
     const tag = type === 'ul' ? 'ul' : 'ol';
-    const regex = /<li>.+<\/li>/g;
-    const matches = html.match(regex) || [];
-    if (matches.length === 0) return html;
+    // 直接查找 <li>...</li> 序列并包裹
+    // 使用 [^]*? 来匹配任意字符（包括换行）
+    const regex = new RegExp(`(<li>[^]*?<\\/li>)((?:\\s*<li>[^]*?<\\/li>))+`, 'gi');
 
-    let result = '';
-    let inList = false;
-    const lines = html.split('\n');
+    return html.replace(regex, (match) => {
+      // 提取所有 <li>...</li> 内容
+      const liRegex = /<li>[^]*?<\/li>/gi;
+      const items = match.match(liRegex) || [];
 
-    for (const line of lines) {
-      if (line.match(/^<li>/)) {
-        if (!inList) {
-          result += `<${tag}>`;
-          inList = true;
-        }
-        result += line;
-      } else {
-        if (inList) {
-          result += `</${tag}>`;
-          inList = false;
-        }
-        result += line;
-      }
-    }
+      if (items.length === 0) return match;
+      if (items.length === 1) return `<${tag}>${items[0]}</${tag}>`;
 
-    if (inList) result += `</${tag}>`;
-    return result;
+      // 多个连续 <li> 合并成一个列表
+      return `<${tag}>${items.join('')}</${tag}>`;
+    });
   }
 
   /**
