@@ -664,6 +664,11 @@ body {
   color: white;
 }
 
+/* 隐藏视图切换按钮 */
+.view-switch {
+  display: none;
+}
+
 /* 字体大小控制 */
 .font-size-control {
   display: flex;
