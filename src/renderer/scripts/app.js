@@ -29,6 +29,7 @@
   let currentView = 'edit';          // 当前视图模式：edit/preview/both
   let currentTheme = 'light';        // 当前主题：light/dark/sepia
   let expandedFolders = new Set();   // 记录已展开的文件夹路径
+  let savedCursorRange = null;       // 保存光标位置（用于表格等插入操作）
 
   // ========================================
   // DOM 元素引用 - 在 init() 中初始化
@@ -1976,6 +1977,14 @@
    * 显示斜杠命令面板
    */
   function showSlashPanel() {
+    // 在编辑器中保存当前光标位置
+    const selection = window.getSelection();
+    if (selection.rangeCount > 0) {
+      savedCursorRange = selection.getRangeAt(0).cloneRange();
+    } else {
+      savedCursorRange = null;
+    }
+
     slashPanelVisible = true;
     slashSelectedIndex = 0;
     slashFilter = '';
@@ -2161,9 +2170,6 @@
    * 在光标位置插入 HTML
    */
   function insertHTMLAtCursor(html) {
-    // 保存滚动位置
-    const scrollTopBefore = editor.scrollTop;
-
     const selection = window.getSelection();
     if (!selection.rangeCount) return;
 
@@ -2187,9 +2193,6 @@
       selection.removeAllRanges();
       selection.addRange(range);
     }
-
-    // 恢复滚动位置
-    editor.scrollTop = scrollTopBefore;
   }
 
   /**
@@ -2393,35 +2396,25 @@
     const rows = parseInt(document.getElementById('table-rows').value) || 3;
     const cols = parseInt(document.getElementById('table-cols').value) || 3;
 
-    // 记录插入前的滚动状态
-    const scrollTopBefore = editor.scrollTop;
-    const scrollHeightBefore = editor.scrollHeight;
-    const clientHeightBefore = editor.clientHeight;
-    console.log('[DEBUG insertTableFromDialog] Before: scrollTop=' + scrollTopBefore + ', scrollHeight=' + scrollHeightBefore + ', clientHeight=' + clientHeightBefore);
-
-    // 计算当前滚动位置占最大可滚动高度的比例
+    // 保存滚动百分比
     const scrollMax = editor.scrollHeight - editor.clientHeight;
-    const scrollPercentage = scrollMax > 0 ? editor.scrollTop / scrollMax : 0;
-    console.log('[DEBUG insertTableFromDialog] scrollPercentage=' + scrollPercentage);
+    const scrollPercent = scrollMax > 0 ? editor.scrollTop / scrollMax : 0;
 
     hideTableDialog();
-    editor.focus();
+
+    // 恢复光标位置
+    if (savedCursorRange) {
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(savedCursorRange);
+    }
 
     insertTable(rows, cols);
 
-    // 恢复相对滚动位置（百分比）
+    // 延迟恢复滚动位置
     requestAnimationFrame(() => {
-      const newScrollTop = editor.scrollTop;
-      const newScrollHeight = editor.scrollHeight;
-      const newClientHeight = editor.clientHeight;
-      console.log('[DEBUG insertTableFromDialog] After RAF: scrollTop=' + newScrollTop + ', scrollHeight=' + newScrollHeight + ', clientHeight=' + newClientHeight);
-
-      const newScrollMax = newScrollHeight - newClientHeight;
-      const newScrollPercentage = newScrollMax > 0 ? newScrollTop / newScrollMax : 0;
-      console.log('[DEBUG insertTableFromDialog] Restoring to scrollPercentage=' + scrollPercentage + ', which should be scrollTop=' + (newScrollMax * scrollPercentage));
-
-      editor.scrollTop = newScrollMax * scrollPercentage;
-      console.log('[DEBUG insertTableFromDialog] Final scrollTop=' + editor.scrollTop);
+      const newScrollMax = editor.scrollHeight - editor.clientHeight;
+      editor.scrollTop = newScrollMax * scrollPercent;
     });
   }
 
