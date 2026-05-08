@@ -1111,7 +1111,7 @@ body {
   font-weight: 600;
 }
 
-.editor-content td:first-child::before {
+.editor-content td:first-child:empty::before {
   content: attr(data-label);
   display: block;
   font-size: 10px;
@@ -1120,7 +1120,7 @@ body {
   margin-bottom: 2px;
 }
 
-.editor-content th:first-child::before {
+.editor-content th:first-child:empty::before {
   content: attr(data-label);
   display: block;
   font-size: 10px;

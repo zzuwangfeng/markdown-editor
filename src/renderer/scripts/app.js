@@ -3055,11 +3055,14 @@
     // 规范化换行符：统一使用 \n
     html = html.replace(/\r\n?/g, '\n');
 
+    // 表格解析 - 必须在段落分割之前处理！
+    html = parseMarkdownTable(html);
+
     // 保护现有 HTML 元素
     const placeholders = [];
     let idx = 0;
 
-    // 保护表格
+    // 保护表格（解析后的 HTML 表格）
     html = html.replace(/<table[^>]*>[\s\S]*?<\/table>/gi, (match) => {
       placeholders.push(match);
       return `__PH_${idx++}__`;
@@ -3090,9 +3093,6 @@
 
     // 代码块
     html = html.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre class="code-block"><code>$2</code></pre>');
-
-    // 表格
-    html = parseMarkdownTable(html);
 
     // 任务列表
     html = html.replace(/^- \[ \] (.+)$/gm, '<div class="task-item"><input type="checkbox" disabled> $1</div>');
@@ -3181,15 +3181,74 @@
    * 解析 Markdown 表格
    */
   function parseMarkdownTable(html) {
-    const tableRegex = /\|(.+)\|\n\|[:\- ]+\|\n((?:\|.+\|\n?)+)/g;
-    return html.replace(tableRegex, (match, header, body) => {
-      const headerCells = header.split('|').filter(c => c.trim()).map(c => `<th>${c.trim()}</th>`).join('');
-      const bodyRows = body.trim().split('\n').map(row => {
-        const cells = row.split('|').filter(c => c.trim()).map(c => `<td>${c.trim()}</td>`).join('');
-        return `<tr>${cells}</tr>`;
-      }).join('');
-      return `<table class="md-table"><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table>`;
-    });
+    // 逐行解析表格
+    const lines = html.split('\n');
+    const result = [];
+    let i = 0;
+
+    while (i < lines.length) {
+      const line = lines[i];
+
+      // 检测是否是表头行（以 | 开头和结尾）
+      if (line.trim().startsWith('|') && line.trim().endsWith('|')) {
+        const tableLines = [line];
+        i++;
+
+        // 继续读取分隔行和数据行直到不是表格行为止
+        while (i < lines.length) {
+          const nextLine = lines[i];
+
+          // 分隔行（包含 ---）
+          if (nextLine.includes('---')) {
+            tableLines.push(nextLine);
+            i++;
+          }
+          // 数据行（以 | 开头）
+          else if (nextLine.trim().startsWith('|') && nextLine.trim().endsWith('|')) {
+            tableLines.push(nextLine);
+            i++;
+          }
+          else {
+            break;
+          }
+        }
+
+        // 将表格行转换为 HTML
+        if (tableLines.length >= 2) {
+          result.push(convertTableLinesToHtml(tableLines));
+        } else {
+          result.push(...tableLines);
+        }
+      } else {
+        result.push(line);
+        i++;
+      }
+    }
+
+    return result.join('\n');
+  }
+
+  /**
+   * 将表格行转换为 HTML
+   */
+  function convertTableLinesToHtml(lines) {
+    if (lines.length < 2) return lines.join('\n');
+
+    const headerLine = lines[0];
+    const separatorLine = lines[1];
+    const bodyLines = lines.slice(2);
+
+    // 解析表头单元格：split('|') 后得到 ['', ' cell1 ', ' cell2 ', ..., '']
+    // slice(1, -1) 去掉首尾空元素
+    const headerCells = headerLine.split('|').slice(1, -1).map(c => `<th>${c.trim()}</th>`).join('');
+
+    // 解析数据行
+    const bodyRows = bodyLines.map(row => {
+      const cells = row.split('|').slice(1, -1).map(c => `<td>${c.trim()}</td>`).join('');
+      return `<tr>${cells}</tr>`;
+    }).join('');
+
+    return `<table class="md-table"><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table>`;
   }
 
   /**
@@ -3234,12 +3293,24 @@
     // 表格
     md = md.replace(/<table[^>]*>([\s\S]*?)<\/table>/gi, (match, content) => {
       const rows = content.match(/<tr[^>]*>([\s\S]*?)<\/tr>/gi) || [];
-      return rows.map(row => {
+      if (rows.length === 0) return match;
+
+      // 处理表头
+      const headerCells = rows[0].match(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi) || [];
+      const headerLine = '| ' + headerCells.map(c => c.replace(/<[^>]+>/g, '').trim()).join(' | ') + ' |';
+
+      // 生成分隔行
+      const colCount = headerCells.length;
+      const separatorLine = '| ' + Array(colCount).fill('---').join(' | ') + ' |';
+
+      // 处理表体
+      const bodyLines = rows.slice(1).map(row => {
         const cells = row.match(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi) || [];
         return '| ' + cells.map(c => c.replace(/<[^>]+>/g, '').trim()).join(' | ') + ' |';
-      }).join('\n');
+      });
+
+      return [headerLine, separatorLine, ...bodyLines].join('\n');
     });
-    md = md.replace(/\|---/g, '|---');
 
     // 任务列表
     md = md.replace(/<div class="task-item"><input[^>]*>\s*([^<]+)<\/div>/gi, (match, text) => {
