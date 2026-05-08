@@ -38,6 +38,7 @@
   let editorWrapper, editorWelcome;
   let currentFileNameEl, saveStatus, wordCount, lineInfo, fileHeaderHint;
   let outlineList, contextMenu, formatToolbar;
+  let imageContextMenu, imageContextTarget;
   let slashPanel, slashList;
   let conflictOverlay, conflictMessage;
   let tableDialogOverlay, imageProgress;
@@ -132,6 +133,7 @@
     fileHeaderHint = document.querySelector('.file-header-hint');
     outlineList = document.getElementById('outline-list');
     contextMenu = document.getElementById('context-menu');
+    imageContextMenu = document.getElementById('image-context-menu');
     formatToolbar = document.getElementById('format-toolbar');
     slashPanel = document.getElementById('slash-panel');
     slashList = document.getElementById('slash-list');
@@ -483,6 +485,35 @@
     if (contextMenu) {
       contextMenu.querySelectorAll('.context-menu-item').forEach(item => {
         item.addEventListener('click', () => handleContextMenuAction(item.dataset.action));
+      });
+    }
+
+    // 图片上下文菜单项
+    if (imageContextMenu) {
+      imageContextMenu.querySelectorAll('.context-menu-item').forEach(item => {
+        item.addEventListener('click', () => handleImageContextAction(item.dataset.action));
+      });
+    }
+
+    // 全局点击隐藏图片菜单
+    document.addEventListener('click', e => {
+      if (imageContextMenu && !imageContextMenu.contains(e.target)) {
+        imageContextMenu.classList.remove('visible');
+        imageContextTarget = null;
+      }
+    });
+
+    // 编辑器内图片右键菜单
+    if (editor) {
+      editor.addEventListener('contextmenu', e => {
+        const img = e.target.closest('img.md-image');
+        if (img) {
+          e.preventDefault();
+          imageContextTarget = img;
+          imageContextMenu.style.top = `${e.clientY}px`;
+          imageContextMenu.style.left = `${e.clientX}px`;
+          imageContextMenu.classList.add('visible');
+        }
       });
     }
 
@@ -2911,6 +2942,28 @@
           await refreshFileTree();
         });
         break;
+    }
+  }
+
+  /**
+   * 处理图片上下文菜单操作
+   */
+  function handleImageContextAction(action) {
+    if (!imageContextTarget) return;
+
+    const img = imageContextTarget;
+    imageContextMenu.classList.remove('visible');
+
+    const scaleMap = {
+      'img-20': 0.2,
+      'img-50': 0.5,
+      'img-70': 0.7,
+      'img-100': 1.0
+    };
+
+    if (scaleMap[action] !== undefined) {
+      img.style.transform = `scale(${scaleMap[action]})`;
+      img.style.transformOrigin = 'top left';
     }
   }
 
