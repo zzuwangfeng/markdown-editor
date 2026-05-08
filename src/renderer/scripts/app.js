@@ -2393,23 +2393,36 @@
     const rows = parseInt(document.getElementById('table-rows').value) || 3;
     const cols = parseInt(document.getElementById('table-cols').value) || 3;
 
-    // 保存当前滚动位置
+    // 记录插入前的滚动状态
     const scrollTopBefore = editor.scrollTop;
+    const scrollHeightBefore = editor.scrollHeight;
+    const clientHeightBefore = editor.clientHeight;
+    console.log('[DEBUG insertTableFromDialog] Before: scrollTop=' + scrollTopBefore + ', scrollHeight=' + scrollHeightBefore + ', clientHeight=' + clientHeightBefore);
 
-    // 隐藏对话框
+    // 计算当前滚动位置占最大可滚动高度的比例
+    const scrollMax = editor.scrollHeight - editor.clientHeight;
+    const scrollPercentage = scrollMax > 0 ? editor.scrollTop / scrollMax : 0;
+    console.log('[DEBUG insertTableFromDialog] scrollPercentage=' + scrollPercentage);
+
     hideTableDialog();
-
-    // 聚焦编辑器
     editor.focus();
 
-    // 恢复滚动位置
-    editor.scrollTop = scrollTopBefore;
-
-    // 插入表格
     insertTable(rows, cols);
 
-    // 再次恢复滚动位置（以防其他操作修改）
-    editor.scrollTop = scrollTopBefore;
+    // 恢复相对滚动位置（百分比）
+    requestAnimationFrame(() => {
+      const newScrollTop = editor.scrollTop;
+      const newScrollHeight = editor.scrollHeight;
+      const newClientHeight = editor.clientHeight;
+      console.log('[DEBUG insertTableFromDialog] After RAF: scrollTop=' + newScrollTop + ', scrollHeight=' + newScrollHeight + ', clientHeight=' + newClientHeight);
+
+      const newScrollMax = newScrollHeight - newClientHeight;
+      const newScrollPercentage = newScrollMax > 0 ? newScrollTop / newScrollMax : 0;
+      console.log('[DEBUG insertTableFromDialog] Restoring to scrollPercentage=' + scrollPercentage + ', which should be scrollTop=' + (newScrollMax * scrollPercentage));
+
+      editor.scrollTop = newScrollMax * scrollPercentage;
+      console.log('[DEBUG insertTableFromDialog] Final scrollTop=' + editor.scrollTop);
+    });
   }
 
   /**
@@ -3173,18 +3186,96 @@
   }
 
   /**
-   * 解析 Markdown 表格
+   * 解析 Markdown 表格 - 按行解析，正确处理多个相邻表格
    */
   function parseMarkdownTable(html) {
-    const tableRegex = /\|([^\n|]+)\|\n\|[:\- ]+\|\n((?:\|[^\n|]+\|\n?)+)/g;
-    return html.replace(tableRegex, (match, header, body) => {
-      const headerCells = header.split('|').filter(c => c.trim()).map(c => `<th>${c.trim()}</th>`).join('');
-      const bodyRows = body.trim().split('\n').map(row => {
-        const cells = row.split('|').filter(c => c.trim()).map(c => `<td>${c.trim()}</td>`).join('');
-        return `<tr>${cells}</tr>`;
-      }).join('');
-      return `<table class="md-table"><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table>`;
-    });
+    console.log('[DEBUG parseMarkdownTable] Input:\n' + html);
+    const lines = html.split('\n');
+    console.log('[DEBUG parseMarkdownTable] Total lines: ' + lines.length);
+    const result = [];
+    let i = 0;
+
+    while (i < lines.length) {
+      const line = lines[i];
+      const trimmedLine = line.trim();
+      const isTableRow = trimmedLine.startsWith('|') && trimmedLine.endsWith('|') && trimmedLine.length > 2;
+      const isSeparator = /^\|[\|\-: \t]+\|$/.test(trimmedLine);
+      console.log('[DEBUG parseMarkdownTable] Line ' + i + ': isTableRow=' + isTableRow + ', isSeparator=' + isSeparator + ', content=' + JSON.stringify(trimmedLine.substring(0, 50)));
+
+      if (isTableRow && !isSeparator) {
+        // 可能开始一个表格
+        const tableStartIdx = i;
+        let tableEndIdx = i;
+        let header = null;
+        const body = [];
+        let foundSeparator = false;
+
+        while (tableEndIdx < lines.length) {
+          const currentLine = lines[tableEndIdx].trim();
+
+          if (tableEndIdx === tableStartIdx) {
+            // 第一行是表头
+            if (currentLine.startsWith('|') && currentLine.endsWith('|')) {
+              header = currentLine;
+            } else {
+              break;
+            }
+          } else if (!foundSeparator) {
+            // 检查是否是分隔行
+            if (/^\|[\|\-: \t]+\|$/.test(currentLine)) {
+              foundSeparator = true;
+            } else if (currentLine.startsWith('|') && currentLine.endsWith('|')) {
+              // 连续的表格行，但没有分隔行，跳过
+            } else {
+              break;
+            }
+          } else {
+            // 已经是分隔行之后，检查是否是表格行
+            if (currentLine.startsWith('|') && currentLine.endsWith('|')) {
+              body.push(currentLine);
+            } else {
+              break;
+            }
+          }
+          tableEndIdx++;
+        }
+
+        if (header && foundSeparator && body.length > 0) {
+          // 有效的表格
+          console.log('[DEBUG parseMarkdownTable] Found valid table: header=' + JSON.stringify(header) + ', body rows=' + body.length);
+
+          // 计算表头列数
+          const headerColCount = header.split('|').filter(c => c.trim()).length;
+          console.log('[DEBUG parseMarkdownTable] Header column count: ' + headerColCount);
+
+          const headerCells = header.split('|').filter(c => c.trim()).map(c => `<th>${c.trim()}</th>`).join('');
+          const bodyRows = body.map(row => {
+            let cells = row.split('|').filter(c => c.trim());
+            console.log('[DEBUG parseMarkdownTable] Body row cells: ' + cells.length + ', content: ' + JSON.stringify(cells));
+            // 补齐或截断单元格以匹配表头列数
+            while (cells.length < headerColCount) cells.push('');
+            if (cells.length > headerColCount) cells = cells.slice(0, headerColCount);
+            return '<tr>' + cells.map(c => `<td>${c.trim()}</td>`).join('') + '</tr>';
+          }).join('');
+
+          const tableHtml = `<table class="md-table"><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table>`;
+          console.log('[DEBUG parseMarkdownTable] Generated HTML: ' + tableHtml);
+          result.push(tableHtml);
+          i = tableEndIdx;
+          continue;
+        } else {
+          console.log('[DEBUG parseMarkdownTable] Not valid: header=' + header + ', foundSeparator=' + foundSeparator + ', body.length=' + body.length);
+          result.push(line);
+          i++;
+        }
+      } else {
+        result.push(line);
+        i++;
+      }
+    }
+
+    console.log('[DEBUG parseMarkdownTable] Final result:\n' + result.join('\n'));
+    return result.join('\n');
   }
 
   /**
@@ -3226,26 +3317,47 @@
 
     let md = html;
 
-    // 表格
-    md = md.replace(/<table[^>]*>([\s\S]*?)<\/table>/gi, (match, content) => {
-      const rows = content.match(/<tr[^>]*>([\s\S]*?)<\/tr>/gi) || [];
-      if (rows.length === 0) return match;
+    // 表格 - 使用 DOM 解析确保正确处理
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = md;
 
-      // 处理表头
-      const headerCells = rows[0].match(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi) || [];
-      const headerLine = '| ' + headerCells.map(c => c.replace(/<[^>]+>/g, '').trim()).join(' | ') + ' |';
+    const tables = tempDiv.querySelectorAll('table');
+    const tableMds = [];
+
+    tables.forEach(table => {
+      const rows = table.querySelectorAll('tr');
+      if (rows.length === 0) {
+        tableMds.push({ html: table.outerHTML, md: table.outerHTML });
+        return;
+      }
+
+      // 处理表头 - 获取真实的列数
+      const headerCells = rows[0].querySelectorAll('th, td');
+      const colCount = headerCells.length;
+      const headerLine = '| ' + Array.from(headerCells).map(c => c.textContent.trim()).join(' | ') + ' |';
 
       // 生成分隔行
-      const colCount = headerCells.length;
       const separatorLine = '| ' + Array(colCount).fill('---').join(' | ') + ' |';
 
       // 处理表体
-      const bodyLines = rows.slice(1).map(row => {
-        const cells = row.match(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/gi) || [];
-        return '| ' + cells.map(c => c.replace(/<[^>]+>/g, '').trim()).join(' | ') + ' |';
-      });
+      const bodyLines = [];
+      for (let i = 1; i < rows.length; i++) {
+        const cells = Array.from(rows[i].querySelectorAll('th, td'));
+        // 补齐列数
+        while (cells.length < colCount) {
+          cells.push({ textContent: '' });
+        }
+        const rowText = '| ' + cells.slice(0, colCount).map(c => c.textContent.trim()).join(' | ') + ' |';
+        bodyLines.push(rowText);
+      }
 
-      return [headerLine, separatorLine, ...bodyLines].join('\n');
+      const tableMd = [headerLine, separatorLine, ...bodyLines].join('\n') + '\n\n';
+      tableMds.push({ html: table.outerHTML, md: tableMd });
+    });
+
+    // 依次替换每个表格的 HTML
+    tableMds.forEach(({ html, md: tableMd }) => {
+      md = md.split(html).join(tableMd);
     });
 
     // 任务列表
