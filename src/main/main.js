@@ -1,5 +1,9 @@
 // FlowMark Editor - 主进程
-const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
+const electron = require('electron');
+console.log('electron:', typeof electron, electron);
+const { app, BrowserWindow, ipcMain, dialog, Menu } = electron;
+console.log('app:', typeof app);
+console.log('BrowserWindow:', typeof BrowserWindow);
 const path = require('path');
 const fs = require('fs');
 

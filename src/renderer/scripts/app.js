@@ -12,6 +12,7 @@
   let currentFileContent = null;      // 当前文件内容（用于检测修改）
   let saveTimeout = null;             // 自动保存定时器
   let isSaving = false;              // 是否正在保存
+  let isLoading = false;            // 是否正在加载文件
   let contextMenuTarget = null;      // 右键菜单目标文件/文件夹
   let slashPanelVisible = false;     // 斜杠命令面板是否可见
   let slashSelectedIndex = 0;        // 斜杠命令面板选中索引
@@ -1663,6 +1664,9 @@
    * 处理文件树项点击
    */
   async function handleTreeItemClick(e, item, treeItem) {
+    // 如果正在加载文件，返回
+    if (isLoading) return;
+
     // 如果点击的是展开箭头区域，不处理文件打开
     if (e.target.closest('.tree-item-expand')) return;
 
@@ -1671,74 +1675,29 @@
       return;
     }
 
+    // 如果点击的就是当前文件，不需要重新加载
+    if (currentFilePath === item.path) {
+      return;
+    }
+
     // 保存当前文件
     if (currentFilePath && !isSaving) {
       await saveCurrentFile();
     }
 
-    // 更新选中状态 - 直接从 treeItem 找到 content 元素
+    // 更新选中状态
     const contentEl = treeItem.querySelector('.tree-item-content');
     document.querySelectorAll('.tree-item-content.selected').forEach(el => {
       el.classList.remove('selected');
     });
     if (contentEl) contentEl.classList.add('selected');
 
-    // 直接操作 DOM 显示编辑器（绕过异步问题）
-    const wrapper = document.getElementById('editor-wrapper');
-    const welcome = document.getElementById('editor-welcome');
-    const editor = document.getElementById('editor');
-    const placeholder = document.getElementById('editor-placeholder');
+    // 显示编辑器区域
+    editorWelcome.classList.add('hidden');
+    editorWrapper.style.display = 'flex';
 
-    if (wrapper) wrapper.style.display = 'flex';
-    if (welcome) welcome.classList.add('hidden');
-
-    // 加载并显示文件内容
-    const content = await window.electronAPI.readFile(item.path);
-    console.log('handleTreeItemClick - content:', content.substring(0, 300));
-    // 转换图片路径为绝对路径
-    const processedContent = convertImagePathsToAbsolute(content, currentWorkspace);
-    console.log('handleTreeItemClick - processedContent:', processedContent.substring(0, 300));
-    if (editor) {
-      editor.innerHTML = markdownToHtml(processedContent);
-      editor.contentEditable = 'true';
-      editor.style.opacity = '1';
-      editor.style.pointerEvents = 'auto';
-    }
-    if (placeholder) {
-      placeholder.style.display = content ? 'none' : 'block';
-    }
-
-    // 更新顶部文件名
-    const fileNameEl = document.getElementById('current-file-name');
-    if (fileNameEl) fileNameEl.textContent = item.name;
-
-    currentFilePath = item.path;
-    currentFileName = item.name;
-
-    // 更新文件头部标题：优先读取文件中的 H1 标题，否则使用文件名
-    const fileHeaderTitle = document.getElementById('file-header-title');
-    if (fileHeaderTitle) {
-      const h1Match = content.match(/^#\s+(.+)$/m);
-      if (h1Match) {
-        fileHeaderTitle.textContent = h1Match[1];
-      } else {
-        fileHeaderTitle.textContent = item.name.replace(/\.md$/, '');
-      }
-    }
-
-    currentFileContent = content;
-
-    const stat = await window.electronAPI.getFileStat(item.path);
-    lastModifiedTime = stat ? stat.mtime : Date.now();
-
-    // 添加到最近文件
-    addToRecentFiles(item.path, item.name);
-
-    // 更新阅读进度
-    calculateReadingProgress();
-
-    updateOutline();
-    updateStats();
+    // 使用 loadFile 加载文件
+    await loadFile(item.path, item.name);
   }
 
   /**
@@ -1753,6 +1712,11 @@
    * 加载文件内容
    */
   async function loadFile(filePath, fileName) {
+    // 如果正在加载文件，返回
+    if (isLoading) return;
+
+    isLoading = true;
+
     currentFilePath = filePath;
     currentFileName = fileName;
     currentFileNameEl.textContent = fileName;
@@ -1760,12 +1724,8 @@
     const content = await window.electronAPI.readFile(filePath);
     currentFileContent = content;
 
-    console.log('loadFile - read from disk:', content.substring(0, 300));
-
     // 转换图片路径为绝对路径
     const processedContent = convertImagePathsToAbsolute(content, currentWorkspace);
-
-    console.log('loadFile - processedContent:', processedContent.substring(0, 300));
 
     // 更新文件头部标题：优先读取文件中的 H1 标题，否则使用文件名
     const fileHeaderTitle = document.getElementById('file-header-title');
@@ -1802,6 +1762,9 @@
 
     updateOutline();
     updateStats();
+
+    // 加载完成
+    isLoading = false;
   }
 
   /**
@@ -1852,16 +1815,13 @@
   function convertImagePathsToRelative(content, workspace) {
     if (!workspace) return content;
 
-    // 匹配任何 file:// 路径中包含 .flowmark-assets 的图片，转换为相对路径
+    // 匹配任何 file:// 路径中包含 .flowmark-assets 的图片，转换为相对路径（不加换行符）
     content = content.replace(
       /!\[([^\]]*)\]\(file:\/\/[^)]*\.flowmark-assets\/([^)]+)\)/g,
       (match, alt, path) => {
-        return `![${alt}](.flowmark-assets/${path})\n`;
+        return `![${alt}](.flowmark-assets/${path})`;
       }
     );
-
-    // 清理末尾多余换行
-    content = content.replace(/\n+$/, '\n');
 
     return content;
   }
@@ -1875,14 +1835,10 @@
     isSaving = true;
     let content = htmlToMarkdown(editor.innerHTML);
 
-    console.log('saveCurrentFile - htmlToMarkdown result:', content.substring(0, 300));
-
     // 将图片绝对路径转换回相对路径再保存
     if (currentWorkspace) {
       content = convertImagePathsToRelative(content, currentWorkspace);
     }
-
-    console.log('saveCurrentFile - final content:', content.substring(0, 300));
 
     const success = await window.electronAPI.writeFile(currentFilePath, content);
 
@@ -3032,12 +2988,7 @@
    * Markdown 转 HTML
    */
   function markdownToHtml(md) {
-    if (!md) {
-      console.log('markdownToHtml - input is empty');
-      return '';
-    }
-
-    console.log('markdownToHtml - input:', md.substring(0, 300));
+    if (!md) return '';
 
     let html = md;
 
@@ -3128,27 +3079,31 @@
     html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
 
     // 段落处理 - 先按双换行分割
-    console.log('Before paragraph split, html:', html.substring(0, 300));
     const paragraphs = html.split(/\n{2,}/);
-    console.log('Paragraphs count:', paragraphs.length);
-    for (let i = 0; i < paragraphs.length; i++) {
-      console.log(`Paragraph ${i}:`, paragraphs[i].substring(0, 100));
-    }
     html = paragraphs.map(p => {
       p = p.trim();
       if (!p) return '';
 
-      // 如果已经是块级标签，不处理
-      if (p.match(/^<(h[1-6]|blockquote|pre|ul|ol|li|hr|div|table)/i)) {
-        // 合并连续的 <li>...</li> 为 <ul>/<ol>
-        p = p.replace(/(<li>[^<]*<\/li>)(\s*<li>[^<]*<\/li>)+/g, (match) => {
-          return `<ul>${match}</ul>`;
-        });
-        // 包裹单独的 <li> 在 <ul> 中
-        p = p.replace(/(<li>[^<]*<\/li>)(?!\s*<li>)/g, (match) => {
-          return `<ul>${match}</ul>`;
-        });
-        return p;
+      // 如果是纯块级标签（标签后无其他内容），不处理；否则包装成段落
+      const blockTagMatch = p.match(/^<(h[1-6]|blockquote|pre|ul|ol|li|hr|div|table)[^>]*>/i);
+      if (blockTagMatch) {
+        const tagName = blockTagMatch[1].toLowerCase();
+        const closingTag = '</' + tagName + '>';
+        const hasClosingTag = p.includes(closingTag);
+        // 如果有闭合标签，检查标签后面是否还有非空白内容
+        const afterClosing = hasClosingTag ? p.split(closingTag)[1] : p.slice(p.search(/\s|>|$/));
+        const hasContentAfter = /\S/.test(afterClosing);
+        if (hasClosingTag && !hasContentAfter) {
+          // 合并连续的 <li>...</li> 为 <ul>/<ol>
+          p = p.replace(/(<li>[^<]*<\/li>)(\s*<li>[^<]*<\/li>)+/g, (match) => {
+            return `<ul>${match}</ul>`;
+          });
+          // 包裹单独的 <li> 在 <ul> 中
+          p = p.replace(/(<li>[^<]*<\/li>)(?!\s*<li>)/g, (match) => {
+            return `<ul>${match}</ul>`;
+          });
+          return p;
+        }
       }
 
       // 否则包装成段落，单换行转<br>
@@ -3158,8 +3113,6 @@
     // 清理
     html = html.replace(/<p><\/p>/g, '');
     html = html.replace(/<br><br>/g, '<br>');
-
-    console.log('markdownToHtml - output:', html.substring(0, 300));
 
     return html;
   }
@@ -3214,12 +3167,7 @@
    * HTML 转 Markdown
    */
   function htmlToMarkdown(html) {
-    if (!html) {
-      console.log('htmlToMarkdown - input is empty');
-      return '';
-    }
-
-    console.log('htmlToMarkdown - input:', html.substring(0, 300));
+    if (!html) return '';
 
     let md = html;
 
@@ -3296,8 +3244,6 @@
     // 清理
     md = md.replace(/\n{3,}/g, '\n\n');
     md = md.trim();
-
-    console.log('htmlToMarkdown - output:', md.substring(0, 300));
 
     return md;
   }
