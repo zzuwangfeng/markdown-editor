@@ -2161,16 +2161,11 @@
    * 在光标位置插入 HTML
    */
   function insertHTMLAtCursor(html) {
+    // 保存滚动位置
     const scrollTopBefore = editor.scrollTop;
-    editor.focus();
+
     const selection = window.getSelection();
-    if (!selection.rangeCount) {
-      const range = document.createRange();
-      range.selectNodeContents(editor);
-      range.collapse(false);
-      selection.removeAllRanges();
-      selection.addRange(range);
-    }
+    if (!selection.rangeCount) return;
 
     const range = selection.getRangeAt(0);
     range.collapse(true);
@@ -2178,7 +2173,6 @@
     const container = document.createElement('div');
     container.innerHTML = html;
     const fragment = document.createDocumentFragment();
-
     while (container.firstChild) {
       fragment.appendChild(container.firstChild);
     }
@@ -2194,12 +2188,8 @@
       selection.addRange(range);
     }
 
-    handleEditorInput();
-
-    // 异步恢复滚动位置，确保在所有DOM操作完成后执行
-    requestAnimationFrame(() => {
-      editor.scrollTop = scrollTopBefore;
-    });
+    // 恢复滚动位置
+    editor.scrollTop = scrollTopBefore;
   }
 
   /**
@@ -2402,19 +2392,24 @@
   function insertTableFromDialog() {
     const rows = parseInt(document.getElementById('table-rows').value) || 3;
     const cols = parseInt(document.getElementById('table-cols').value) || 3;
+
+    // 保存当前滚动位置
+    const scrollTopBefore = editor.scrollTop;
+
+    // 隐藏对话框
     hideTableDialog();
 
+    // 聚焦编辑器
     editor.focus();
-    const selection = window.getSelection();
-    if (!selection.rangeCount) {
-      const range = document.createRange();
-      range.selectNodeContents(editor);
-      range.collapse(false);
-      selection.removeAllRanges();
-      selection.addRange(range);
-    }
 
+    // 恢复滚动位置
+    editor.scrollTop = scrollTopBefore;
+
+    // 插入表格
     insertTable(rows, cols);
+
+    // 再次恢复滚动位置（以防其他操作修改）
+    editor.scrollTop = scrollTopBefore;
   }
 
   /**
@@ -3181,74 +3176,15 @@
    * 解析 Markdown 表格
    */
   function parseMarkdownTable(html) {
-    // 逐行解析表格
-    const lines = html.split('\n');
-    const result = [];
-    let i = 0;
-
-    while (i < lines.length) {
-      const line = lines[i];
-
-      // 检测是否是表头行（以 | 开头和结尾）
-      if (line.trim().startsWith('|') && line.trim().endsWith('|')) {
-        const tableLines = [line];
-        i++;
-
-        // 继续读取分隔行和数据行直到不是表格行为止
-        while (i < lines.length) {
-          const nextLine = lines[i];
-
-          // 分隔行（包含 ---）
-          if (nextLine.includes('---')) {
-            tableLines.push(nextLine);
-            i++;
-          }
-          // 数据行（以 | 开头）
-          else if (nextLine.trim().startsWith('|') && nextLine.trim().endsWith('|')) {
-            tableLines.push(nextLine);
-            i++;
-          }
-          else {
-            break;
-          }
-        }
-
-        // 将表格行转换为 HTML
-        if (tableLines.length >= 2) {
-          result.push(convertTableLinesToHtml(tableLines));
-        } else {
-          result.push(...tableLines);
-        }
-      } else {
-        result.push(line);
-        i++;
-      }
-    }
-
-    return result.join('\n');
-  }
-
-  /**
-   * 将表格行转换为 HTML
-   */
-  function convertTableLinesToHtml(lines) {
-    if (lines.length < 2) return lines.join('\n');
-
-    const headerLine = lines[0];
-    const separatorLine = lines[1];
-    const bodyLines = lines.slice(2);
-
-    // 解析表头单元格：split('|') 后得到 ['', ' cell1 ', ' cell2 ', ..., '']
-    // slice(1, -1) 去掉首尾空元素
-    const headerCells = headerLine.split('|').slice(1, -1).map(c => `<th>${c.trim()}</th>`).join('');
-
-    // 解析数据行
-    const bodyRows = bodyLines.map(row => {
-      const cells = row.split('|').slice(1, -1).map(c => `<td>${c.trim()}</td>`).join('');
-      return `<tr>${cells}</tr>`;
-    }).join('');
-
-    return `<table class="md-table"><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table>`;
+    const tableRegex = /\|([^\n|]+)\|\n\|[:\- ]+\|\n((?:\|[^\n|]+\|\n?)+)/g;
+    return html.replace(tableRegex, (match, header, body) => {
+      const headerCells = header.split('|').filter(c => c.trim()).map(c => `<th>${c.trim()}</th>`).join('');
+      const bodyRows = body.trim().split('\n').map(row => {
+        const cells = row.split('|').filter(c => c.trim()).map(c => `<td>${c.trim()}</td>`).join('');
+        return `<tr>${cells}</tr>`;
+      }).join('');
+      return `<table class="md-table"><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table>`;
+    });
   }
 
   /**
