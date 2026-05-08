@@ -36,7 +36,7 @@
   let sidebar, fileTree, emptyState, workspaceName, recentList, recentEmpty;
   let btnAdd, dropdownMenu, editor, editorPlaceholder;
   let editorWrapper, editorWelcome;
-  let currentFileNameEl, saveStatus, wordCount, lineInfo;
+  let currentFileNameEl, saveStatus, wordCount, lineInfo, fileHeaderHint;
   let outlineList, contextMenu, formatToolbar;
   let slashPanel, slashList;
   let conflictOverlay, conflictMessage;
@@ -129,6 +129,7 @@
     saveStatus = document.getElementById('save-status');
     wordCount = document.getElementById('word-count');
     lineInfo = document.getElementById('line-info');
+    fileHeaderHint = document.querySelector('.file-header-hint');
     outlineList = document.getElementById('outline-list');
     contextMenu = document.getElementById('context-menu');
     formatToolbar = document.getElementById('format-toolbar');
@@ -1750,6 +1751,9 @@
 
     editor.innerHTML = markdownToHtml(processedContent);
     editorPlaceholder.style.display = content ? 'none' : 'block';
+    if (fileHeaderHint) {
+      fileHeaderHint.style.display = content ? 'none' : 'block';
+    }
 
     // 同步侧边栏选中状态
     syncSidebarSelection(filePath);
@@ -1872,6 +1876,9 @@
   function handleEditorInput() {
     try {
       editorPlaceholder.style.display = editor.innerHTML ? 'none' : 'block';
+      if (fileHeaderHint) {
+        fileHeaderHint.style.display = editor.innerHTML ? 'none' : 'block';
+      }
       updateStats();
       debouncedUpdateOutline();
       calculateReadingProgress();
