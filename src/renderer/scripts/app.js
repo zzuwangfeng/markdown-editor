@@ -1871,6 +1871,9 @@
     isSaving = true;
     let content = htmlToMarkdown(editor.innerHTML);
 
+    // 调试：记录保存的内容前200字符
+    console.log('[saveCurrentFile] Markdown content (first 200):', content.substring(0, 200));
+
     // 将图片绝对路径转换回相对路径再保存
     if (currentWorkspace) {
       content = convertImagePathsToRelative(content, currentWorkspace);
@@ -3208,6 +3211,9 @@
     // 规范化换行符：统一使用 \n
     html = html.replace(/\r\n?/g, '\n');
 
+    // 调试：记录原始内容前200字符
+    console.log('[markdownToHtml] Original (first 200):', html.substring(0, 200));
+
     // 表格解析 - 必须在段落分割之前处理！
     html = parseMarkdownTable(html);
 
@@ -3517,11 +3523,11 @@
     // 行内代码
     md = md.replace(/<code>([^<]+)<\/code>/g, '`$1`');
 
-    // 标题
-    md = md.replace(/<h1[^>]*>([^<]+)<\/h1>/gi, '# $1\n');
-    md = md.replace(/<h2[^>]*>([^<]+)<\/h2>/gi, '## $1\n');
-    md = md.replace(/<h3[^>]*>([^<]+)<\/h3>/gi, '### $1\n');
-    md = md.replace(/<h4[^>]*>([^<]+)<\/h4>/gi, '#### $1\n');
+    // 标题 - 使用两个换行符确保标题之间有适当间距
+    md = md.replace(/<h1[^>]*>([^<]+)<\/h1>/gi, '# $1\n\n');
+    md = md.replace(/<h2[^>]*>([^<]+)<\/h2>/gi, '## $1\n\n');
+    md = md.replace(/<h3[^>]*>([^<]+)<\/h3>/gi, '### $1\n\n');
+    md = md.replace(/<h4[^>]*>([^<]+)<\/h4>/gi, '#### $1\n\n');
 
     // 粗体
     md = md.replace(/<strong>([^<]+)<\/strong>/g, '**$1**');
