@@ -58,6 +58,7 @@
   let btnToggleSidebar;
   let viewSwitch, searchPanel, searchInput, searchResults, searchClose, searchClear, searchInfo;
   let sidebarTabs;
+  let sidebarSearch, sidebarSearchInput, sidebarSearchClear;
   // 项目搜索面板元素
   let searchPanelProject, searchInputProject, searchCloseProject, searchResultsProject, searchInfoProject, searchClearProject;
 
@@ -186,6 +187,9 @@
     searchInfoProject = document.getElementById('search-info-project');
     searchClearProject = document.getElementById('search-clear');
     sidebarTabs = document.querySelectorAll('.sidebar-tab');
+    sidebarSearch = document.getElementById('sidebar-search');
+    sidebarSearchInput = document.getElementById('sidebar-search-input');
+    sidebarSearchClear = document.getElementById('sidebar-search-clear');
 
     // 绑定所有事件监听器
     bindEvents();
@@ -435,6 +439,12 @@
     // 侧边栏切换按钮
     if (btnToggleSidebar) {
       btnToggleSidebar.addEventListener('click', toggleSidebar);
+    }
+
+    // 侧边栏文件搜索
+    if (sidebarSearchInput) {
+      sidebarSearchInput.addEventListener('input', handleSidebarSearchInput);
+      sidebarSearchClear.addEventListener('click', clearSidebarSearch);
     }
 
     // 下拉菜单项目点击
@@ -833,6 +843,97 @@
   function toggleSidebar() {
     sidebar.classList.toggle('hidden');
     sidebar.classList.add('animate');
+  }
+
+  /**
+   * 处理侧边栏搜索输入
+   */
+  function handleSidebarSearchInput(e) {
+    const query = e.target.value.trim();
+    sidebarSearchClear.classList.toggle('visible', query.length > 0);
+
+    if (query.length > 0) {
+      searchFilesInTree(query);
+    } else {
+      clearSidebarSearch();
+    }
+  }
+
+  /**
+   * 在目录树中搜索文件
+   */
+  function searchFilesInTree(query) {
+    if (!currentWorkspace) return;
+
+    // 隐藏原始文件列表，显示搜索结果区域
+    fileTree.innerHTML = '<div class="search-results-header">搜索结果</div><div class="search-results-list" id="search-results-list"></div>';
+    const searchResultsList = document.getElementById('search-results-list');
+
+    // 递归搜索文件
+    async function searchRecursive(dirPath) {
+      const results = [];
+      try {
+        const items = await window.electronAPI.readDirectory(dirPath);
+        console.log('[searchRecursive] dir:', dirPath, 'items:', items.length);
+        for (const item of items) {
+          if (item.isDirectory) {
+            const subResults = await searchRecursive(item.path);
+            results.push(...subResults);
+          } else {
+            if (item.name.toLowerCase().includes(query.toLowerCase())) {
+              results.push(item);
+            }
+          }
+        }
+      } catch (e) {
+        console.error('[searchRecursive] error:', e);
+      }
+      return results;
+    }
+
+    searchRecursive(currentWorkspace).then((results) => {
+      console.log('[searchFilesInTree] final results:', results);
+      renderSidebarSearchResults(results, searchResultsList);
+    });
+  }
+
+  /**
+   * 渲染搜索结果
+   */
+  function renderSidebarSearchResults(results, container) {
+    if (results.length === 0) {
+      container.innerHTML = '<div class="empty-state"><p>未找到匹配文件</p></div>';
+      return;
+    }
+
+    container.innerHTML = '';
+    results.forEach(file => {
+      const item = document.createElement('div');
+      item.className = 'tree-item';
+      item.dataset.path = file.path;
+      item.innerHTML = `
+        <div class="tree-item-content">
+          <span class="tree-item-icon">${icons.file}</span>
+          <span class="tree-item-name">${file.name}</span>
+        </div>
+      `;
+      item.addEventListener('click', () => {
+        openFile(file.path);
+        clearSidebarSearch();
+      });
+      container.appendChild(item);
+    });
+  }
+
+  /**
+   * 清空侧边栏搜索
+   */
+  function clearSidebarSearch() {
+    sidebarSearchInput.value = '';
+    sidebarSearchClear.classList.remove('visible');
+    if (currentWorkspace) {
+      refreshFileTree();
+    }
   }
 
   /**

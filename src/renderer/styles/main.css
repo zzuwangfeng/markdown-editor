@@ -253,7 +253,7 @@ body {
 .sidebar-search-close {
   width: 20px;
   height: 20px;
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
   background: transparent;
@@ -265,9 +265,26 @@ body {
   flex-shrink: 0;
 }
 
+.sidebar-search-close.visible {
+  display: flex;
+}
+
 .sidebar-search-close:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
+}
+
+.search-results-header {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.search-results-list {
+  flex: 1;
+  overflow-y: auto;
 }
 
 /* 搜索结果列表 */
