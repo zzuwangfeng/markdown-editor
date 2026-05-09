@@ -55,6 +55,7 @@
   let btnReadingMode, btnOutline, btnSearch, btnFullscreen, btnRefresh;
   let btnFontDecrease, btnFontIncrease;
   let btnTheme, themeDropdown;
+  let btnToggleSidebar;
   let viewSwitch, searchPanel, searchInput, searchResults, searchClose, searchClear, searchInfo;
   let sidebarTabs;
   // 项目搜索面板元素
@@ -172,6 +173,7 @@
     themeDropdown = document.getElementById('theme-dropdown');
     viewSwitch = document.getElementById('view-switch');
     btnRefresh = document.getElementById('btn-refresh');
+    btnToggleSidebar = document.getElementById('btn-toggle-sidebar');
     // 文档搜索面板元素
     searchPanel = document.getElementById('search-panel');
     searchInput = document.getElementById('search-input');
@@ -428,6 +430,11 @@
           await refreshFileTree();
         }
       });
+    }
+
+    // 侧边栏切换按钮
+    if (btnToggleSidebar) {
+      btnToggleSidebar.addEventListener('click', toggleSidebar);
     }
 
     // 下拉菜单项目点击
@@ -824,7 +831,7 @@
    * 切换侧边栏显示
    */
   function toggleSidebar() {
-    sidebar.style.display = sidebar.style.display === 'none' ? 'flex' : 'none';
+    sidebar.classList.toggle('hidden');
   }
 
   /**

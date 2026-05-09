@@ -92,6 +92,14 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transition: width 0.25s ease, min-width 0.25s ease, opacity 0.25s ease;
+}
+
+.sidebar.hidden {
+  width: 0;
+  min-width: 0;
+  opacity: 0;
+  overflow: hidden;
 }
 
 .sidebar-header {
