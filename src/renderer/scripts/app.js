@@ -2171,7 +2171,24 @@
    */
   function insertHTMLAtCursor(html) {
     const selection = window.getSelection();
-    if (!selection.rangeCount) return;
+
+    // 如果没有选区或选区不在编辑器内，尝试使用保存的光标位置
+    if (!selection.rangeCount || !editor.contains(selection.anchorNode)) {
+      if (savedCursorRange) {
+        selection.removeAllRanges();
+        selection.addRange(savedCursorRange);
+      } else {
+        editor.focus();
+        // 再次检查，如果还是没有有效选区，在末尾创建
+        if (!selection.rangeCount) {
+          const range = document.createRange();
+          range.selectNodeContents(editor);
+          range.collapse(false);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+      }
+    }
 
     const range = selection.getRangeAt(0);
     range.collapse(true);
@@ -2199,7 +2216,23 @@
    * 插入标题
    */
   function insertHeading(level) {
+    const selection = window.getSelection();
+
+    // 保存滚动百分比
+    const scrollMax = editor.scrollHeight - editor.clientHeight;
+    const scrollPercent = scrollMax > 0 ? editor.scrollTop / scrollMax : 0;
+
+    if (selection.rangeCount > 0 && editor.contains(selection.anchorNode)) {
+      savedCursorRange = selection.getRangeAt(0).cloneRange();
+    }
+
     insertHTMLAtCursor(`<h${level}>标题</h${level}>`);
+
+    // 延迟恢复滚动位置
+    requestAnimationFrame(() => {
+      const newScrollMax = editor.scrollHeight - editor.clientHeight;
+      editor.scrollTop = newScrollMax * scrollPercent;
+    });
   }
 
   /**
@@ -2207,7 +2240,26 @@
    */
   function wrapSelection(tag) {
     const selection = window.getSelection();
-    if (!selection.rangeCount) return;
+
+    // 保存滚动百分比
+    const scrollMax = editor.scrollHeight - editor.clientHeight;
+    const scrollPercent = scrollMax > 0 ? editor.scrollTop / scrollMax : 0;
+
+    if (!selection.rangeCount) {
+      editor.focus();
+      // 等待 focus 后创建选区
+      setTimeout(() => {
+        const sel = window.getSelection();
+        if (!sel.rangeCount) {
+          const range = document.createRange();
+          range.selectNodeContents(editor);
+          range.collapse(false);
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
+      }, 10);
+      return;
+    }
 
     const selectedText = selection.toString();
 
@@ -2224,6 +2276,10 @@
       selection.addRange(range);
     } else {
       // 无选区，插入空标签对并将光标放在标签内
+      if (editor.contains(selection.anchorNode)) {
+        savedCursorRange = selection.getRangeAt(0).cloneRange();
+      }
+
       editor.focus();
       const wrapper = document.createElement(tag);
       wrapper.textContent = '​'; // 零宽空格，让光标可以进入空标签
@@ -2247,7 +2303,12 @@
       }
     }
 
-    editor.focus();
+    // 延迟恢复滚动位置
+    requestAnimationFrame(() => {
+      const newScrollMax = editor.scrollHeight - editor.clientHeight;
+      editor.scrollTop = newScrollMax * scrollPercent;
+    });
+
     handleEditorInput();
   }
 
@@ -2255,22 +2316,30 @@
    * 插入代码块（使用 div 替代 pre 以支持 ContentEditable）
    */
   function insertCodeBlock() {
-    editor.focus();
     const selection = window.getSelection();
 
     // 检查是否在已有的代码块内
     let inCodeBlock = false;
-    if (selection.rangeCount > 0) {
+    if (selection.rangeCount > 0 && editor.contains(selection.anchorNode)) {
       const node = selection.anchorNode;
       if (node.parentElement && node.parentElement.classList.contains('code-block')) {
         inCodeBlock = true;
       }
     }
 
+    // 保存滚动百分比
+    const scrollMax = editor.scrollHeight - editor.clientHeight;
+    const scrollPercent = scrollMax > 0 ? editor.scrollTop / scrollMax : 0;
+
     if (inCodeBlock) {
       // 已经在代码块内，直接插入换行
       insertHTMLAtCursor('<br>');
       return;
+    }
+
+    // 保存当前光标位置
+    if (selection.rangeCount > 0 && editor.contains(selection.anchorNode)) {
+      savedCursorRange = selection.getRangeAt(0).cloneRange();
     }
 
     // 不在代码块内，插入新的代码块
@@ -2280,7 +2349,9 @@
     codeBlock.contentEditable = 'true';
 
     // 插入到当前光标位置
-    if (selection.rangeCount > 0) {
+    if (savedCursorRange) {
+      selection.removeAllRanges();
+      selection.addRange(savedCursorRange);
       const range = selection.getRangeAt(0);
       range.deleteContents();
       range.insertNode(codeBlock);
@@ -2300,6 +2371,12 @@
       selection.addRange(newRange);
     }
 
+    // 延迟恢复滚动位置
+    requestAnimationFrame(() => {
+      const newScrollMax = editor.scrollHeight - editor.clientHeight;
+      editor.scrollTop = newScrollMax * scrollPercent;
+    });
+
     handleEditorInput();
   }
 
@@ -2307,25 +2384,32 @@
    * 插入链接
    */
   function insertLink() {
-    editor.focus();
     const selection = window.getSelection();
     const selectedText = selection.toString() || '链接文本';
 
-    let savedRange = null;
-    if (selection.rangeCount > 0) {
-      savedRange = selection.getRangeAt(0).cloneRange();
+    // 保存滚动百分比
+    const scrollMax = editor.scrollHeight - editor.clientHeight;
+    const scrollPercent = scrollMax > 0 ? editor.scrollTop / scrollMax : 0;
+
+    if (selection.rangeCount > 0 && editor.contains(selection.anchorNode)) {
+      savedCursorRange = selection.getRangeAt(0).cloneRange();
     }
 
     const url = prompt('请输入链接地址：', 'https://');
 
-    if (savedRange) {
-      selection.removeAllRanges();
-      selection.addRange(savedRange);
-    }
-
     if (url) {
+      if (savedCursorRange) {
+        selection.removeAllRanges();
+        selection.addRange(savedCursorRange);
+      }
       const html = `<a href="${url}" target="_blank">${selectedText}</a>`;
       insertHTMLAtCursor(html);
+
+      // 延迟恢复滚动位置
+      requestAnimationFrame(() => {
+        const newScrollMax = editor.scrollHeight - editor.clientHeight;
+        editor.scrollTop = newScrollMax * scrollPercent;
+      });
     }
   }
 
@@ -2338,13 +2422,29 @@
       return;
     }
 
+    // 保存滚动百分比
+    const scrollMax = editor.scrollHeight - editor.clientHeight;
+    const scrollPercent = scrollMax > 0 ? editor.scrollTop / scrollMax : 0;
+
     try {
       const result = await window.electronAPI.selectImage();
       if (result && result.filePath) {
         const relativePath = await saveImageToAssets(result.filePath);
         const html = `<img src="${relativePath}" alt="${result.fileName}" class="md-image">`;
-        editor.focus();
+
+        // 保存当前光标位置
+        const selection = window.getSelection();
+        if (selection.rangeCount > 0 && editor.contains(selection.anchorNode)) {
+          savedCursorRange = selection.getRangeAt(0).cloneRange();
+        }
+
         insertHTMLAtCursor(html);
+
+        // 延迟恢复滚动位置
+        requestAnimationFrame(() => {
+          const newScrollMax = editor.scrollHeight - editor.clientHeight;
+          editor.scrollTop = newScrollMax * scrollPercent;
+        });
       }
     } catch (e) {
       console.error('Insert image error:', e);
@@ -2450,31 +2550,83 @@
    * 插入列表
    */
   function insertList(type) {
+    const selection = window.getSelection();
+    const scrollMax = editor.scrollHeight - editor.clientHeight;
+    const scrollPercent = scrollMax > 0 ? editor.scrollTop / scrollMax : 0;
+
+    if (selection.rangeCount > 0 && editor.contains(selection.anchorNode)) {
+      savedCursorRange = selection.getRangeAt(0).cloneRange();
+    }
+
     const tag = type === 'ul' ? 'ul' : 'ol';
     const html = `<${tag}><li></li></${tag}>`;
     insertHTMLAtCursor(html);
+
+    requestAnimationFrame(() => {
+      const newScrollMax = editor.scrollHeight - editor.clientHeight;
+      editor.scrollTop = newScrollMax * scrollPercent;
+    });
   }
 
   /**
    * 插入待办清单
    */
   function insertTodoList() {
+    const selection = window.getSelection();
+    const scrollMax = editor.scrollHeight - editor.clientHeight;
+    const scrollPercent = scrollMax > 0 ? editor.scrollTop / scrollMax : 0;
+
+    if (selection.rangeCount > 0 && editor.contains(selection.anchorNode)) {
+      savedCursorRange = selection.getRangeAt(0).cloneRange();
+    }
+
     const html = '<ul class="task-list"><li class="task-item"><input type="checkbox"> 待办事项</li></ul>';
     insertHTMLAtCursor(html);
+
+    requestAnimationFrame(() => {
+      const newScrollMax = editor.scrollHeight - editor.clientHeight;
+      editor.scrollTop = newScrollMax * scrollPercent;
+    });
   }
 
   /**
    * 插入引用块
    */
   function insertBlockquote() {
+    const selection = window.getSelection();
+    const scrollMax = editor.scrollHeight - editor.clientHeight;
+    const scrollPercent = scrollMax > 0 ? editor.scrollTop / scrollMax : 0;
+
+    if (selection.rangeCount > 0 && editor.contains(selection.anchorNode)) {
+      savedCursorRange = selection.getRangeAt(0).cloneRange();
+    }
+
     insertHTMLAtCursor('<blockquote></blockquote>');
+
+    requestAnimationFrame(() => {
+      const newScrollMax = editor.scrollHeight - editor.clientHeight;
+      editor.scrollTop = newScrollMax * scrollPercent;
+    });
   }
 
   /**
    * 插入水平分割线
    */
   function insertHorizontalRule() {
+    const selection = window.getSelection();
+    const scrollMax = editor.scrollHeight - editor.clientHeight;
+    const scrollPercent = scrollMax > 0 ? editor.scrollTop / scrollMax : 0;
+
+    if (selection.rangeCount > 0 && editor.contains(selection.anchorNode)) {
+      savedCursorRange = selection.getRangeAt(0).cloneRange();
+    }
+
     insertHTMLAtCursor('<hr>');
+
+    requestAnimationFrame(() => {
+      const newScrollMax = editor.scrollHeight - editor.clientHeight;
+      editor.scrollTop = newScrollMax * scrollPercent;
+    });
   }
 
   /**
