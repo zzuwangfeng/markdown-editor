@@ -102,6 +102,10 @@ body {
   overflow: hidden;
 }
 
+.sidebar.animate {
+  transition: width 0.25s ease, min-width 0.25s ease, opacity 0.25s ease;
+}
+
 .sidebar-header {
   display: flex;
   align-items: center;
@@ -530,6 +534,13 @@ body {
 
 .tree-children.expanded {
   display: block;
+}
+
+.tree-children.no-animate {
+  animation: none;
+}
+
+.tree-children.animate {
   animation: slideDown 200ms ease;
 }
 

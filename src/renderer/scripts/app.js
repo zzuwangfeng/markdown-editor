@@ -832,6 +832,7 @@
    */
   function toggleSidebar() {
     sidebar.classList.toggle('hidden');
+    sidebar.classList.add('animate');
   }
 
   /**
@@ -1837,10 +1838,10 @@
     treeItems.forEach(item => {
       if (item.dataset.path === filePath) {
         item.querySelector('.tree-item-content').classList.add('selected');
-        // 展开父文件夹
+        // 展开父文件夹（不带动画）
         let parent = item.parentElement;
         while (parent && parent.classList.contains('tree-children')) {
-          parent.classList.add('expanded');
+          parent.classList.add('expanded', 'no-animate');
           const parentTreeItem = parent.parentElement;
           if (parentTreeItem && parentTreeItem.querySelector('.tree-item-expand')) {
             parentTreeItem.querySelector('.tree-item-expand').classList.add('expanded');
