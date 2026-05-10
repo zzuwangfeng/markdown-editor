@@ -31,7 +31,9 @@
       "target": [
         "dmg"
       ],
-      "category": "public.app-category.productivity"
+      "category": "public.app-category.productivity",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
     },
     "win": {
       "target": [
@@ -42,7 +44,10 @@
     "files": [
       "src/**/*",
       "assets/**/*"
-    ]
+    ],
+    "extraMetadata": {
+      "main": "src/main/main.js"
+    }
   },
   "keywords": [],
   "type": "commonjs"

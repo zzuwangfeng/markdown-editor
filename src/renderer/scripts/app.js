@@ -3196,8 +3196,10 @@
         break;
 
       case 'delete':
-        showConfirm('确认删除', `确定要删除 "${item.name}" 吗？此操作不可撤销。`, async () => {
-          await window.electronAPI.deleteItem(item.path);
+        showConfirm('确认删除', `确定要将 "${item.name}" 移动到回收站吗？`, async () => {
+          console.log('[handleContextAction] delete item.path:', item.path);
+          const result = await window.electronAPI.deleteItem(item.path);
+          console.log('[handleContextAction] delete result:', result);
           if (currentFilePath === item.path) {
             currentFilePath = null;
             currentFileName = null;

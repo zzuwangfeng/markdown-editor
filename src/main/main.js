@@ -1,5 +1,5 @@
 // FlowMark Editor - 主进程
-const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -60,7 +60,8 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      sandbox: false
     }
   });
 
@@ -298,15 +299,25 @@ ipcMain.handle('rename-item', async (event, oldPath, newName) => {
 
 ipcMain.handle('delete-item', async (event, itemPath) => {
   try {
-    const stats = await fs.promises.stat(itemPath);
-    if (stats.isDirectory()) {
-      await fs.promises.rm(itemPath, { recursive: true });
+    console.log('[delete-item] shell type:', typeof shell);
+    console.log('[delete-item] shell keys:', Object.keys(shell));
+    console.log('[delete-item] shell.moveItemToTrash:', typeof shell.moveItemToTrash);
+    console.log('[delete-item] shell.trashItem:', typeof shell.trashItem);
+    console.log('[delete-item] path:', itemPath);
+    // 尝试使用 trashItem (新版 API)
+    if (typeof shell.trashItem === 'function') {
+      await shell.trashItem(itemPath);
+      console.log('[delete-item] moved to trash via trashItem');
+      return { success: true };
+    } else if (typeof shell.moveItemToTrash === 'function') {
+      const result = shell.moveItemToTrash(itemPath);
+      console.log('[delete-item] result:', result);
+      return { success: result };
     } else {
-      await fs.promises.unlink(itemPath);
+      throw new Error('Neither trashItem nor moveItemToTrash available');
     }
-    return { success: true };
   } catch (error) {
-    console.error('Error deleting item:', error);
+    console.error('Error moving to trash:', error);
     return { success: false, error: error.message };
   }
 });
