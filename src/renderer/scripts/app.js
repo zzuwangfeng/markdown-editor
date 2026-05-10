@@ -37,7 +37,7 @@
   let sidebar, fileTree, emptyState, workspaceName, recentList, recentEmpty;
   let btnAdd, dropdownMenu, editor, editorPlaceholder;
   let editorWrapper, editorWelcome;
-  let currentFileNameEl, saveStatus, wordCount, lineInfo, fileHeaderHint;
+  let currentFileNameEl, saveStatus, wordCount, lineInfo, fileHeaderHint, fileHeaderTitle;
   let outlineList, contextMenu, formatToolbar;
   let imageContextMenu, imageContextTarget;
   let slashPanel, slashList;
@@ -134,6 +134,7 @@
     wordCount = document.getElementById('word-count');
     lineInfo = document.getElementById('line-info');
     fileHeaderHint = document.querySelector('.file-header-hint');
+    fileHeaderTitle = document.getElementById('file-header-title');
     outlineList = document.getElementById('outline-list');
     contextMenu = document.getElementById('context-menu');
     imageContextMenu = document.getElementById('image-context-menu');
@@ -1458,34 +1459,7 @@
    */
   async function openFileInEditor(filePath) {
     const fileName = filePath.split('/').pop();
-    const content = await window.electronAPI.readFile(filePath);
-    currentFilePath = filePath;
-    currentFileName = fileName;
-    currentFileContent = content;
-
-    // 显示编辑器区域，隐藏欢迎界面
-    const wrapper = document.getElementById('editor-wrapper');
-    const welcome = document.getElementById('editor-welcome');
-    const editor = document.getElementById('editor');
-    const placeholder = document.getElementById('editor-placeholder');
-    const fileNameEl = document.getElementById('current-file-name');
-
-    if (wrapper) wrapper.style.display = 'flex';
-    if (welcome) welcome.classList.add('hidden');
-    if (editor) {
-      editor.innerHTML = markdownToHtml(content);
-      editor.contentEditable = 'true';
-      editor.style.opacity = '1';
-      editor.style.pointerEvents = 'auto';
-    }
-    if (placeholder) placeholder.style.display = content ? 'none' : 'block';
-    if (fileNameEl) fileNameEl.textContent = fileName;
-
-    const stat = await window.electronAPI.getFileStat(filePath);
-    lastModifiedTime = stat ? stat.mtime : Date.now();
-
-    updateOutline();
-    updateStats();
+    await loadFile(filePath, fileName);
   }
 
   /**
@@ -1869,15 +1843,9 @@
     // 转换图片路径为绝对路径
     const processedContent = convertImagePathsToAbsolute(content, currentWorkspace);
 
-    // 更新文件头部标题：优先读取文件中的 H1 标题，否则使用文件名
-    const fileHeaderTitle = document.getElementById('file-header-title');
+    // 更新文件头部标题：始终显示文件名（去除.md）
     if (fileHeaderTitle) {
-      const h1Match = content.match(/^#\s+(.+)$/m);
-      if (h1Match) {
-        fileHeaderTitle.textContent = h1Match[1];
-      } else {
-        fileHeaderTitle.textContent = fileName.replace(/\.md$/, '');
-      }
+      fileHeaderTitle.textContent = fileName.replace(/\.md$/, '');
     }
 
     const stat = await window.electronAPI.getFileStat(filePath);
@@ -1891,9 +1859,11 @@
     enableEditor();
 
     editor.innerHTML = markdownToHtml(processedContent);
-    editorPlaceholder.style.display = content ? 'none' : 'block';
+    // 编辑区为空时显示 file-header-hint
+    const hasContent = editor.innerHTML.trim().length > 0;
+    editorPlaceholder.style.display = 'none'; // 始终隐藏 placeholder，用 file-header-hint 代替
     if (fileHeaderHint) {
-      fileHeaderHint.style.display = content ? 'none' : 'block';
+      fileHeaderHint.style.display = hasContent ? 'none' : 'block';
     }
 
     // 同步侧边栏选中状态
@@ -2089,8 +2059,10 @@
    * 显示斜杠命令面板
    */
   function showSlashPanel() {
+    console.log('[showSlashPanel] called, slashPanel:', slashPanel);
     // 在编辑器中保存当前光标位置
     const selection = window.getSelection();
+    console.log('[showSlashPanel] selection:', selection, 'rangeCount:', selection ? selection.rangeCount : 0);
     if (selection.rangeCount > 0) {
       savedCursorRange = selection.getRangeAt(0).cloneRange();
     } else {
@@ -2101,7 +2073,9 @@
     slashSelectedIndex = 0;
     slashFilter = '';
     renderSlashList();
+    console.log('[showSlashPanel] adding visible class, panel:', slashPanel);
     slashPanel.classList.add('visible');
+    console.log('[showSlashPanel] done, panel classes:', slashPanel.className);
   }
 
   /**
@@ -2237,6 +2211,7 @@
   function handleEditorKeydown(e) {
     // 显示斜杠命令面板
     if (e.key === '/' && !slashPanelVisible) {
+      console.log('[handleEditorKeydown] slash pressed, slashPanelVisible:', slashPanelVisible);
       e.preventDefault();
       showSlashPanel();
       return;
