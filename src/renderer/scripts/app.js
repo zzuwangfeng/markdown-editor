@@ -2388,31 +2388,27 @@
       selection.addRange(range);
     } else {
       // 无选区，插入空标签对并将光标放在标签内
-      if (editor.contains(selection.anchorNode)) {
-        savedCursorRange = selection.getRangeAt(0).cloneRange();
-      }
-
-      editor.focus();
       const wrapper = document.createElement(tag);
       wrapper.textContent = '​'; // 零宽空格，让光标可以进入空标签
 
-      if (selection.rangeCount > 0) {
-        const range = selection.getRangeAt(0);
-        range.deleteContents();
+      if (savedCursorRange) {
+        // 使用保存的光标位置插入
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(savedCursorRange);
+        const range = sel.getRangeAt(0);
         range.insertNode(wrapper);
-        // 将光标放在零宽空格之后（即标签内）
-        range.selectNodeContents(wrapper);
-        range.collapse(false);
-        selection.removeAllRanges();
-        selection.addRange(range);
       } else {
         editor.appendChild(wrapper);
-        const range = document.createRange();
-        range.selectNodeContents(wrapper);
-        range.collapse(false);
-        selection.removeAllRanges();
-        selection.addRange(range);
       }
+
+      // 将光标放在零宽空格之后（即标签内）
+      const range = document.createRange();
+      range.selectNodeContents(wrapper);
+      range.collapse(false);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
     }
 
     // 延迟恢复滚动位置
