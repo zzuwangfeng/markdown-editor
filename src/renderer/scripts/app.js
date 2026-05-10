@@ -40,6 +40,7 @@
   let currentFileNameEl, saveStatus, wordCount, lineInfo, fileHeaderHint, fileHeaderTitle;
   let outlineList, contextMenu, formatToolbar;
   let imageContextMenu, imageContextTarget;
+  let tableContextMenu, tableContextTarget;
   let slashPanel, slashList;
   let conflictOverlay, conflictMessage;
   let tableDialogOverlay, imageProgress;
@@ -138,6 +139,7 @@
     outlineList = document.getElementById('outline-list');
     contextMenu = document.getElementById('context-menu');
     imageContextMenu = document.getElementById('image-context-menu');
+    tableContextMenu = document.getElementById('table-context-menu');
     formatToolbar = document.getElementById('format-toolbar');
     slashPanel = document.getElementById('slash-panel');
     slashList = document.getElementById('slash-list');
@@ -514,11 +516,22 @@
       });
     }
 
+    // 表格上下文菜单项
+    if (tableContextMenu) {
+      tableContextMenu.querySelectorAll('.context-menu-item').forEach(item => {
+        item.addEventListener('click', () => handleTableContextAction(item.dataset.action));
+      });
+    }
+
     // 全局点击隐藏图片菜单
     document.addEventListener('click', e => {
       if (imageContextMenu && !imageContextMenu.contains(e.target)) {
         imageContextMenu.classList.remove('visible');
         imageContextTarget = null;
+      }
+      if (tableContextMenu && !tableContextMenu.contains(e.target)) {
+        tableContextMenu.classList.remove('visible');
+        tableContextTarget = null;
       }
     });
 
@@ -532,6 +545,33 @@
           imageContextMenu.style.top = `${e.clientY}px`;
           imageContextMenu.style.left = `${e.clientX}px`;
           imageContextMenu.classList.add('visible');
+        }
+
+        const table = e.target.closest('table.md-table');
+        if (table) {
+          e.preventDefault();
+          const cell = e.target.closest('td, th');
+          // 检查当前单元格是否在表头行 (TH的父元素是TR，TR的父元素是THEAD)
+          const row = cell.parentElement;
+          const isInThead = row.parentElement.tagName === 'THEAD';
+          tableContextTarget = { table, cell, isInThead };
+
+          // 重置菜单项显示状态，然后根据条件隐藏
+          tableContextMenu.querySelectorAll('.context-menu-item').forEach(item => {
+            item.style.display = '';
+          });
+
+          // 选中表头时隐藏"在上方插入行"和"删除行"
+          if (isInThead) {
+            const insertRowAbove = tableContextMenu.querySelector('[data-action="insert-row-above"]');
+            const deleteRow = tableContextMenu.querySelector('[data-action="delete-row"]');
+            if (insertRowAbove) insertRowAbove.style.display = 'none';
+            if (deleteRow) deleteRow.style.display = 'none';
+          }
+
+          tableContextMenu.style.top = `${e.clientY}px`;
+          tableContextMenu.style.left = `${e.clientX}px`;
+          tableContextMenu.classList.add('visible');
         }
       });
     }
@@ -2610,7 +2650,7 @@
     // 表头
     html += '<thead><tr>';
     for (let i = 0; i < cols; i++) {
-      html += `<th data-label="列${i + 1}">列${i + 1}</th>`;
+      html += `<th>-</th>`;
     }
     html += '</tr></thead>';
 
@@ -2619,8 +2659,7 @@
     for (let i = 0; i < rows - 1; i++) {
       html += '<tr>';
       for (let j = 0; j < cols; j++) {
-        const label = j === 0 ? `行${i + 1}` : '';
-        html += `<td data-label="${label}">${label}</td>`;
+        html += `<td>-</td>`;
       }
       html += '</tr>';
     }
@@ -3203,6 +3242,133 @@
       img.style.maxWidth = maxWidthMap[action];
       img.style.width = maxWidthMap[action];
     }
+  }
+
+  /**
+   * 处理表格上下文菜单操作
+   */
+  function handleTableContextAction(action) {
+    if (!tableContextTarget || !tableContextTarget.cell) return;
+
+    const { table, cell } = tableContextTarget;
+    const thead = table.querySelector('thead');
+    const tbody = table.querySelector('tbody');
+    const row = cell.parentElement;
+    const cellIndex = Array.from(row.children).indexOf(cell);
+    const isInThead = row.parentElement.tagName === 'THEAD';
+    const allRows = thead ? [thead.rows[0]] : [];
+    if (tbody) {
+      for (let i = 0; i < tbody.rows.length; i++) {
+        allRows.push(tbody.rows[i]);
+      }
+    }
+
+    switch (action) {
+      case 'insert-row-above': {
+        // 表头行不允许往上插入
+        if (isInThead) return;
+        const tbodyRows = tbody ? Array.from(tbody.rows) : [];
+        const rowIdx = tbodyRows.indexOf(row);
+        const newRow = tbody.insertRow(rowIdx);
+        for (let i = 0; i < allRows[0].cells.length; i++) {
+          const td = document.createElement('td');
+          td.textContent = '-';
+          newRow.appendChild(td);
+        }
+        break;
+      }
+      case 'insert-row-below': {
+        const tbodyRows = tbody ? Array.from(tbody.rows) : [];
+        if (isInThead) {
+          // 表头行，在 tbody 第一行前插入
+          if (tbody && tbody.rows.length > 0) {
+            const newRow = tbody.insertRow(0);
+            for (let i = 0; i < allRows[0].cells.length; i++) {
+              const td = document.createElement('td');
+              td.textContent = '-';
+              newRow.appendChild(td);
+            }
+          } else if (tbody) {
+            const newRow = tbody.insertRow();
+            for (let i = 0; i < allRows[0].cells.length; i++) {
+              const td = document.createElement('td');
+              td.textContent = '-';
+              newRow.appendChild(td);
+            }
+          }
+        } else {
+          const rowIdx = tbodyRows.indexOf(row);
+          const newRow = tbody.insertRow(rowIdx + 1);
+          for (let i = 0; i < allRows[0].cells.length; i++) {
+            const td = document.createElement('td');
+            td.textContent = '-';
+            newRow.appendChild(td);
+          }
+        }
+        break;
+      }
+      case 'delete-row':
+        if (isInThead) return; // 不允许删除表头行
+        if (tbody && tbody.rows.length > 1) {
+          const tbodyRows = Array.from(tbody.rows);
+          const rowIdx = tbodyRows.indexOf(row);
+          tbody.deleteRow(rowIdx);
+        }
+        break;
+      case 'insert-col-left':
+      case 'insert-col-right': {
+        const isLeft = action === 'insert-col-left';
+        const refIndex = isLeft ? cellIndex : cellIndex + 1;
+        const totalCols = allRows[0].cells.length;
+
+        // 在表头插入
+        if (thead && thead.rows[0]) {
+          const th = document.createElement('th');
+          th.textContent = '-';
+          // 复制相邻表头单元格的样式
+          const refCell = thead.rows[0].cells[refIndex] || thead.rows[0].cells[refIndex - 1];
+          if (refCell) {
+            th.style.cssText = refCell.style.cssText;
+          }
+          thead.rows[0].insertBefore(th, thead.rows[0].cells[refIndex] || null);
+        }
+
+        // 在表体插入
+        if (tbody) {
+          for (let i = 0; i < tbody.rows.length; i++) {
+            const td = document.createElement('td');
+            td.textContent = '-';
+            // 复制相邻单元格样式
+            const refCell = tbody.rows[i].cells[refIndex] || tbody.rows[i].cells[refIndex - 1];
+            if (refCell) {
+              td.style.cssText = refCell.style.cssText;
+            }
+            tbody.rows[i].insertBefore(td, tbody.rows[i].cells[refIndex] || null);
+          }
+        }
+        break;
+      }
+      case 'delete-col': {
+        if (thead && thead.rows[0] && thead.rows[0].cells.length <= 1) return;
+        if (tbody && tbody.rows[0] && tbody.rows[0].cells.length <= 1) return;
+
+        // 删除表头列
+        if (thead && thead.rows[0]) {
+          thead.rows[0].deleteCell(cellIndex);
+        }
+
+        // 删除表体列
+        if (tbody) {
+          for (let i = 0; i < tbody.rows.length; i++) {
+            tbody.rows[i].deleteCell(cellIndex);
+          }
+        }
+        break;
+      }
+    }
+
+    tableContextMenu.classList.remove('visible');
+    tableContextTarget = null;
   }
 
   // ========================================
