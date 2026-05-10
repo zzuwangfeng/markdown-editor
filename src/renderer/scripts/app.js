@@ -3221,16 +3221,16 @@
     const img = imageContextTarget;
     imageContextMenu.classList.remove('visible');
 
-    const scaleMap = {
-      'img-20': 0.2,
-      'img-50': 0.5,
-      'img-70': 0.7,
-      'img-100': 1.0
+    const maxWidthMap = {
+      'img-20': '20%',
+      'img-50': '50%',
+      'img-70': '70%',
+      'img-100': '100%'
     };
 
-    if (scaleMap[action] !== undefined) {
-      img.style.transform = `scale(${scaleMap[action]})`;
-      img.style.transformOrigin = 'top left';
+    if (maxWidthMap[action] !== undefined) {
+      img.style.maxWidth = maxWidthMap[action];
+      img.style.width = maxWidthMap[action];
     }
   }
 
