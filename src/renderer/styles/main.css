@@ -1124,6 +1124,51 @@ body {
   background: var(--bg-secondary);
 }
 
+/* 表格调整大小的把手 */
+.editor-content .md-table {
+  table-layout: fixed;
+}
+
+.editor-content .md-table th,
+.editor-content .md-table td {
+  position: relative;
+}
+
+.editor-content .md-table .cell-content {
+  display: block;
+  min-height: 1em;
+}
+
+.editor-content .md-table .col-resize-handle {
+  position: absolute;
+  right: -3px;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  background: transparent;
+  z-index: 10;
+}
+
+.editor-content .md-table .col-resize-handle:hover {
+  background: var(--accent);
+}
+
+.editor-content .md-table .row-resize-handle {
+  position: absolute;
+  bottom: -3px;
+  left: 0;
+  right: 0;
+  height: 8px;
+  cursor: row-resize;
+  background: transparent;
+  z-index: 10;
+}
+
+.editor-content .md-table .row-resize-handle:hover {
+  background: var(--accent);
+}
+
 /* 图片 */
 .editor-content img {
   max-width: 100%;

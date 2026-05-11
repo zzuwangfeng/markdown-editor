@@ -576,6 +576,9 @@
       });
     }
 
+    // 初始化表格调整大小功能
+    initTableResize();
+
     // 对话框按钮
     if (dialogCancel) dialogCancel.addEventListener('click', hideDialog);
     if (dialogConfirm) dialogConfirm.addEventListener('click', confirmDialog);
@@ -2647,19 +2650,19 @@
   function insertTable(rows, cols) {
     let html = '<table class="md-table">';
 
-    // 表头
+    // 表头 - 每列都有 col-resize-handle，每行有 row-resize-handle
     html += '<thead><tr>';
     for (let i = 0; i < cols; i++) {
-      html += `<th>-</th>`;
+      html += `<th><span class="cell-content">列${i + 1}</span><span class="col-resize-handle"></span><span class="row-resize-handle"></span></th>`;
     }
     html += '</tr></thead>';
 
-    // 表体
+    // 表体 - 每列有 col-resize-handle，每行有 row-resize-handle
     html += '<tbody>';
     for (let i = 0; i < rows - 1; i++) {
       html += '<tr>';
       for (let j = 0; j < cols; j++) {
-        html += `<td>-</td>`;
+        html += `<td><span class="cell-content">行${i + 1}列${j + 1}</span><span class="col-resize-handle"></span><span class="row-resize-handle"></span></td>`;
       }
       html += '</tr>';
     }
@@ -3270,9 +3273,11 @@
         const tbodyRows = tbody ? Array.from(tbody.rows) : [];
         const rowIdx = tbodyRows.indexOf(row);
         const newRow = tbody.insertRow(rowIdx);
-        for (let i = 0; i < allRows[0].cells.length; i++) {
+        const totalCols = allRows[0].cells.length;
+        const newRowIndex = rowIdx; // 新行在原位置
+        for (let i = 0; i < totalCols; i++) {
           const td = document.createElement('td');
-          td.textContent = '-';
+          td.innerHTML = `<span class="cell-content">行${newRowIndex + 1}列${i + 1}</span><span class="col-resize-handle"></span><span class="row-resize-handle"></span>`;
           newRow.appendChild(td);
         }
         break;
@@ -3283,25 +3288,29 @@
           // 表头行，在 tbody 第一行前插入
           if (tbody && tbody.rows.length > 0) {
             const newRow = tbody.insertRow(0);
-            for (let i = 0; i < allRows[0].cells.length; i++) {
+            const totalCols = thead.rows[0].cells.length;
+            for (let i = 0; i < totalCols; i++) {
               const td = document.createElement('td');
-              td.textContent = '-';
+              td.innerHTML = `<span class="cell-content">行1列${i + 1}</span><span class="col-resize-handle"></span><span class="row-resize-handle"></span>`;
               newRow.appendChild(td);
             }
           } else if (tbody) {
             const newRow = tbody.insertRow();
-            for (let i = 0; i < allRows[0].cells.length; i++) {
+            const totalCols = allRows[0].cells.length;
+            for (let i = 0; i < totalCols; i++) {
               const td = document.createElement('td');
-              td.textContent = '-';
+              td.innerHTML = `<span class="cell-content">行1列${i + 1}</span><span class="col-resize-handle"></span><span class="row-resize-handle"></span>`;
               newRow.appendChild(td);
             }
           }
         } else {
           const rowIdx = tbodyRows.indexOf(row);
           const newRow = tbody.insertRow(rowIdx + 1);
-          for (let i = 0; i < allRows[0].cells.length; i++) {
+          const totalCols = allRows[0].cells.length;
+          const newRowIndex = rowIdx + 2; // 新行在原行下方
+          for (let i = 0; i < totalCols; i++) {
             const td = document.createElement('td');
-            td.textContent = '-';
+            td.innerHTML = `<span class="cell-content">行${newRowIndex}列${i + 1}</span><span class="col-resize-handle"></span><span class="row-resize-handle"></span>`;
             newRow.appendChild(td);
           }
         }
@@ -3320,11 +3329,12 @@
         const isLeft = action === 'insert-col-left';
         const refIndex = isLeft ? cellIndex : cellIndex + 1;
         const totalCols = allRows[0].cells.length;
+        const newColIndex = refIndex; // 新列的索引
 
         // 在表头插入
         if (thead && thead.rows[0]) {
           const th = document.createElement('th');
-          th.textContent = '-';
+          th.innerHTML = `<span class="cell-content">列${newColIndex + 1}</span><span class="col-resize-handle"></span><span class="row-resize-handle"></span>`;
           // 复制相邻表头单元格的样式
           const refCell = thead.rows[0].cells[refIndex] || thead.rows[0].cells[refIndex - 1];
           if (refCell) {
@@ -3337,7 +3347,7 @@
         if (tbody) {
           for (let i = 0; i < tbody.rows.length; i++) {
             const td = document.createElement('td');
-            td.textContent = '-';
+            td.innerHTML = `<span class="cell-content">行${i + 1}列${newColIndex + 1}</span><span class="col-resize-handle"></span><span class="row-resize-handle"></span>`;
             // 复制相邻单元格样式
             const refCell = tbody.rows[i].cells[refIndex] || tbody.rows[i].cells[refIndex - 1];
             if (refCell) {
@@ -3369,6 +3379,81 @@
 
     tableContextMenu.classList.remove('visible');
     tableContextTarget = null;
+  }
+
+  /**
+   * 初始化表格调整大小功能
+   */
+  function initTableResize() {
+    let isResizing = false;
+    let resizeTarget = null;
+    let startX = 0;
+    let startY = 0;
+    let startWidth = 0;
+    let startHeight = 0;
+    let isColResize = false;
+
+    document.addEventListener('mousedown', (e) => {
+      const handle = e.target.closest('.col-resize-handle, .row-resize-handle');
+      if (!handle) return;
+
+      const cell = handle.closest('td, th');
+      if (!cell) return;
+
+      isResizing = true;
+      resizeTarget = cell;
+      startX = e.clientX;
+      startY = e.clientY;
+      startWidth = cell.offsetWidth;
+      startHeight = cell.offsetHeight;
+      isColResize = handle.classList.contains('col-resize-handle');
+
+      // 计算当前单元格所在的列索引和行索引
+      const tr = cell.parentElement;
+      const cellIndex = Array.from(tr.children).indexOf(cell);
+      const table = tr.closest('table');
+
+      // 获取所有行
+      const allRows = table.querySelectorAll('tr');
+
+      e.preventDefault();
+      e.stopPropagation();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!isResizing || !resizeTarget) return;
+
+      const tr = resizeTarget.parentElement;
+      const cellIndex = Array.from(tr.children).indexOf(resizeTarget);
+      const table = tr.closest('table');
+      const allRows = table.querySelectorAll('tr');
+
+      if (isColResize) {
+        const delta = e.clientX - startX;
+        const newWidth = Math.max(40, startWidth + delta);
+        // 手柄在单元格右侧，cellIndex 就是被拖动列的索引
+        allRows.forEach(row => {
+          if (cellIndex >= 0 && row.children[cellIndex]) {
+            row.children[cellIndex].style.width = `${newWidth}px`;
+          }
+        });
+      } else {
+        // 行拖拽 - 改变当前行所有单元格的高度
+        const delta = e.clientY - startY;
+        const newHeight = Math.max(20, startHeight + delta);
+        // 设置当前行所有单元格的高度
+        Array.from(tr.children).forEach(td => {
+          td.style.height = `${newHeight}px`;
+        });
+      }
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (isResizing) {
+        isResizing = false;
+        resizeTarget = null;
+      }
+    });
   }
 
   // ========================================
@@ -3593,13 +3678,26 @@
     console.log('[DEBUG parseMarkdownTable] Total lines: ' + lines.length);
     const result = [];
     let i = 0;
+    let pendingColWidths = null;
+    let pendingRowHeights = null;
 
     while (i < lines.length) {
       const line = lines[i];
       const trimmedLine = line.trim();
+
+      // 检查是否是维度注释
+      if (trimmedLine.startsWith('<!--') && trimmedLine.includes('colwidths')) {
+        const dimMatch = trimmedLine.match(/colwidths:([^|]+)/);
+        const rowMatch = trimmedLine.match(/rowheights:([^|]+)/);
+        pendingColWidths = dimMatch ? dimMatch[1].split(',').map(w => w ? parseInt(w) : null) : [];
+        pendingRowHeights = rowMatch ? rowMatch[1].split(',').map(h => h ? parseInt(h) : null) : [];
+        console.log('[DEBUG parseMarkdownTable] Found dims: colWidths=' + JSON.stringify(pendingColWidths) + ', rowHeights=' + JSON.stringify(pendingRowHeights));
+        i++;
+        continue;
+      }
+
       const isTableRow = trimmedLine.startsWith('|') && trimmedLine.endsWith('|') && trimmedLine.length > 2;
       const isSeparator = /^\|[\|\-: \t]+\|$/.test(trimmedLine);
-      console.log('[DEBUG parseMarkdownTable] Line ' + i + ': isTableRow=' + isTableRow + ', isSeparator=' + isSeparator + ', content=' + JSON.stringify(trimmedLine.substring(0, 50)));
 
       if (isTableRow && !isSeparator) {
         // 可能开始一个表格
@@ -3609,27 +3707,27 @@
         const body = [];
         let foundSeparator = false;
 
+        // 使用待处理的维度注释
+        const colWidths = pendingColWidths || [];
+        const rowHeights = pendingRowHeights || [];
+
         while (tableEndIdx < lines.length) {
           const currentLine = lines[tableEndIdx].trim();
 
           if (tableEndIdx === tableStartIdx) {
-            // 第一行是表头
             if (currentLine.startsWith('|') && currentLine.endsWith('|')) {
               header = currentLine;
             } else {
               break;
             }
           } else if (!foundSeparator) {
-            // 检查是否是分隔行
             if (/^\|[\|\-: \t]+\|$/.test(currentLine)) {
               foundSeparator = true;
             } else if (currentLine.startsWith('|') && currentLine.endsWith('|')) {
-              // 连续的表格行，但没有分隔行，跳过
             } else {
               break;
             }
           } else {
-            // 已经是分隔行之后，检查是否是表格行
             if (currentLine.startsWith('|') && currentLine.endsWith('|')) {
               body.push(currentLine);
             } else {
@@ -3640,30 +3738,39 @@
         }
 
         if (header && foundSeparator && body.length > 0) {
-          // 有效的表格
-          console.log('[DEBUG parseMarkdownTable] Found valid table: header=' + JSON.stringify(header) + ', body rows=' + body.length);
-
-          // 计算表头列数
           const headerColCount = header.split('|').filter(c => c.trim()).length;
-          console.log('[DEBUG parseMarkdownTable] Header column count: ' + headerColCount);
 
-          const headerCells = header.split('|').filter(c => c.trim()).map(c => `<th>${c.trim()}</th>`).join('');
-          const bodyRows = body.map(row => {
+          // 生成表头单元格，应用列宽和行高
+          const headerHeight = rowHeights[0] ? rowHeights[0] : null;
+          const headerCells = header.split('|').filter(c => c.trim()).map((c, idx) => {
+            const widthStyle = colWidths[idx] ? `width:${colWidths[idx]}px` : '';
+            const heightStyle = headerHeight ? `height:${headerHeight}px` : '';
+            const styleParts = [widthStyle, heightStyle].filter(s => s).join(';');
+            const style = styleParts ? ` style="${styleParts}"` : '';
+            return `<th${style}><span class="cell-content">${c.trim()}</span><span class="col-resize-handle"></span><span class="row-resize-handle"></span></th>`;
+          }).join('');
+
+          // 生成表体行，应用行高
+          const bodyRows = body.map((row, rowIdx) => {
             let cells = row.split('|').filter(c => c.trim());
-            console.log('[DEBUG parseMarkdownTable] Body row cells: ' + cells.length + ', content: ' + JSON.stringify(cells));
-            // 补齐或截断单元格以匹配表头列数
             while (cells.length < headerColCount) cells.push('');
             if (cells.length > headerColCount) cells = cells.slice(0, headerColCount);
-            return '<tr>' + cells.map(c => `<td>${c.trim()}</td>`).join('') + '</tr>';
+            return '<tr>' + cells.map((c, colIdx) => {
+              // rowHeights[0] is header height, body rows start from rowHeights[1]
+              const height = rowHeights[rowIdx + 1] ? rowHeights[rowIdx + 1] : null;
+              const style = height ? ` style="height:${height}px"` : '';
+              return `<td${style}><span class="cell-content">${c.trim()}</span><span class="col-resize-handle"></span><span class="row-resize-handle"></span></td>`;
+            }).join('') + '</tr>';
           }).join('');
 
           const tableHtml = `<table class="md-table"><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table>`;
-          console.log('[DEBUG parseMarkdownTable] Generated HTML: ' + tableHtml);
           result.push(tableHtml);
           i = tableEndIdx;
+          // 清空待处理的维度
+          pendingColWidths = null;
+          pendingRowHeights = null;
           continue;
         } else {
-          console.log('[DEBUG parseMarkdownTable] Not valid: header=' + header + ', foundSeparator=' + foundSeparator + ', body.length=' + body.length);
           result.push(line);
           i++;
         }
@@ -3673,7 +3780,6 @@
       }
     }
 
-    console.log('[DEBUG parseMarkdownTable] Final result:\n' + result.join('\n'));
     return result.join('\n');
   }
 
@@ -3730,10 +3836,43 @@
         return;
       }
 
+      // 保存列宽和行高
+      const colWidths = [];
+      const rowHeights = [];
+
+      // 获取第一行每个单元格的宽度作为列宽
+      if (rows[0]) {
+        Array.from(rows[0].children).forEach((cell, idx) => {
+          const w = cell.style.width;
+          colWidths.push(w ? parseInt(w) : null);
+        });
+      }
+
+      // 获取每行的第一个单元格的高度作为行高
+      rows.forEach(row => {
+        const firstCell = row.children[0];
+        if (firstCell) {
+          const h = firstCell.style.height;
+          rowHeights.push(h ? parseInt(h) : null);
+        }
+      });
+
+      // 生成维度注释
+      const dimComment = '<!-- ' +
+        (colWidths.some(w => w !== null) ? `colwidths:${colWidths.map(w => w || '').join(',')}` : '') +
+        ' | ' +
+        (rowHeights.some(h => h !== null) ? `rowheights:${rowHeights.map(h => h || '').join(',')}` : '') +
+        ' -->';
+
       // 处理表头 - 获取真实的列数
       const headerCells = rows[0].querySelectorAll('th, td');
       const colCount = headerCells.length;
-      const headerLine = '| ' + Array.from(headerCells).map(c => c.textContent.trim()).join(' | ') + ' |';
+      // 只获取 .cell-content 内的文本，否则会包含 resize-handle 的文本
+      const getCellText = (cell) => {
+        const contentSpan = cell.querySelector('.cell-content');
+        return contentSpan ? contentSpan.textContent.trim() : cell.textContent.trim();
+      };
+      const headerLine = '| ' + Array.from(headerCells).map(c => getCellText(c)).join(' | ') + ' |';
 
       // 生成分隔行
       const separatorLine = '| ' + Array(colCount).fill('---').join(' | ') + ' |';
@@ -3746,11 +3885,11 @@
         while (cells.length < colCount) {
           cells.push({ textContent: '' });
         }
-        const rowText = '| ' + cells.slice(0, colCount).map(c => c.textContent.trim()).join(' | ') + ' |';
+        const rowText = '| ' + cells.slice(0, colCount).map(c => getCellText(c)).join(' | ') + ' |';
         bodyLines.push(rowText);
       }
 
-      const tableMd = [headerLine, separatorLine, ...bodyLines].join('\n') + '\n\n';
+      const tableMd = dimComment + '\n' + [headerLine, separatorLine, ...bodyLines].join('\n') + '\n\n';
       tableMds.push({ html: table.outerHTML, md: tableMd });
     });
 
