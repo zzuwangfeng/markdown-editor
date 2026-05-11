@@ -422,6 +422,23 @@
   // 事件绑定
   // ========================================
   function bindEvents() {
+    // 检测平台并设置 body class
+    const isMac = navigator.userAgent.includes('Mac');
+    if (isMac) {
+      document.body.classList.add('mac');
+    } else {
+      document.body.classList.add('win');
+    }
+
+    // 标题栏按钮
+    const btnMinimize = document.getElementById('btn-minimize');
+    const btnMaximize = document.getElementById('btn-maximize');
+    const btnClose = document.getElementById('btn-close');
+
+    if (btnMinimize) btnMinimize.addEventListener('click', () => window.electronAPI.windowMinimize());
+    if (btnMaximize) btnMaximize.addEventListener('click', () => window.electronAPI.windowMaximize());
+    if (btnClose) btnClose.addEventListener('click', () => window.electronAPI.windowClose());
+
     // 添加按钮（下拉菜单触发）
     btnAdd.addEventListener('click', handleAddClick);
 

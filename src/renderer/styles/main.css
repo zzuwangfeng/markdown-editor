@@ -79,8 +79,147 @@ body {
   display: flex;
   height: 100vh;
   width: 100vw;
-  padding-top: 28px; /* macOS 窗口控件区域高度 */
+  padding-top: 0;
   box-sizing: border-box;
+}
+
+/* Custom Title Bar */
+.custom-titlebar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 32px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+/* macOS traffic lights - top right */
+.titlebar-controls-mac {
+  display: none;
+  -webkit-app-region: no-drag;
+  margin-right: 12px;
+  margin-left: 12px;
+}
+
+.traffic-light-btn {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: none;
+  margin-right: 8px;
+  cursor: pointer;
+  position: relative;
+}
+
+.traffic-light-close {
+  background: #ff5f57;
+}
+
+.traffic-light-minimize {
+  background: #febc2e;
+}
+
+.traffic-light-maximize {
+  background: #28c840;
+}
+
+/* macOS traffic lights symbols on hover */
+.traffic-light-close:hover::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 8px;
+  height: 8px;
+  background: rgba(0,0,0,0.55);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2 2l8 8M10 2l-8 8' stroke='white' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center/contain no-repeat;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2 2l8 8M10 2l-8 8' stroke='white' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center/contain no-repeat;
+}
+
+.traffic-light-minimize:hover::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 8px;
+  height: 2px;
+  background: rgba(0,0,0,0.55);
+}
+
+.traffic-light-maximize:hover::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid rgba(0,0,0,0.55);
+  background: transparent;
+  box-sizing: border-box;
+}
+
+/* Windows buttons - top right */
+.titlebar-controls-win {
+  display: none;
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-drag-region {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding-left: 12px;
+}
+
+.titlebar-btn {
+  width: 46px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-btn:hover {
+  background: var(--bg-hover);
+}
+
+.titlebar-btn-close:hover {
+  background: #e81123;
+  color: white;
+}
+
+/* Platform-specific visibility */
+.mac .titlebar-controls-mac {
+  display: flex;
+}
+
+.mac .titlebar-controls-win {
+  display: none;
+}
+
+.mac .titlebar-drag-region {
+  display: none;
+}
+
+.win .titlebar-controls-win {
+  display: flex;
+}
+
+.win .titlebar-controls-mac {
+  display: none;
+}
+
+.win .titlebar-drag-region {
+  padding-left: 0;
 }
 
 /* Sidebar */

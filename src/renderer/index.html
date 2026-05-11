@@ -8,6 +8,23 @@
   <link rel="stylesheet" href="styles/main.css">
 </head>
 <body>
+  <!-- 自定义标题栏 -->
+  <div class="custom-titlebar" id="custom-titlebar">
+    <div class="titlebar-drag-region">FlowMark Editor</div>
+    <!-- macOS 红绿灯按钮 - 右上角 -->
+    <div class="titlebar-controls-mac" id="titlebar-controls-mac">
+      <button class="traffic-light-btn traffic-light-close" id="btn-close" title="关闭"></button>
+      <button class="traffic-light-btn traffic-light-minimize" id="btn-minimize" title="最小化"></button>
+      <button class="traffic-light-btn traffic-light-maximize" id="btn-maximize" title="最大化"></button>
+    </div>
+    <!-- Windows 按钮 - 右上角 -->
+    <div class="titlebar-controls-win" id="titlebar-controls-win">
+      <button class="titlebar-btn" id="btn-minimize" title="最小化">─</button>
+      <button class="titlebar-btn" id="btn-maximize" title="最大化">□</button>
+      <button class="titlebar-btn titlebar-btn-close" id="btn-close" title="关闭">×</button>
+    </div>
+  </div>
+
   <div class="app-container">
     <!-- 左侧边栏 -->
     <aside class="sidebar" id="sidebar">

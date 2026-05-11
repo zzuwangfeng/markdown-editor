@@ -17,6 +17,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   selectImage: () => ipcRenderer.invoke('select-image'),
   // 项目全文搜索
   searchProject: (workspace, query, options) => ipcRenderer.invoke('search-project', workspace, query, options),
+  // 窗口控制
+  windowMinimize: () => ipcRenderer.invoke('window-minimize'),
+  windowMaximize: () => ipcRenderer.invoke('window-maximize'),
+  windowClose: () => ipcRenderer.invoke('window-close'),
   // 监听菜单事件
   onMenuEvent: (callback) => ipcRenderer.on('menu-event', (event, action) => callback(action))
 });
