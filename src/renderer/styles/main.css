@@ -77,10 +77,11 @@ body {
 /* App Container */
 .app-container {
   display: flex;
-  height: 100vh;
+  height: calc(100vh - 32px);
   width: 100vw;
   padding-top: 0;
   box-sizing: border-box;
+  min-height: 0;
 }
 
 /* Custom Title Bar */
@@ -232,6 +233,8 @@ body {
   flex-direction: column;
   overflow: hidden;
   transition: width 0.25s ease, min-width 0.25s ease, opacity 0.25s ease;
+  height: 100%;
+  min-height: 0;
 }
 
 .sidebar.hidden {
@@ -252,6 +255,7 @@ body {
   padding: 12px 12px 8px;
   border-bottom: 1px solid var(--border-color);
   background: transparent;
+  flex-shrink: 0;
 }
 
 .sidebar-title {
@@ -303,6 +307,7 @@ body {
   flex: 1;
   overflow-y: auto;
   padding: 8px 0;
+  min-height: 0;
 }
 
 .recent-empty {
@@ -594,6 +599,7 @@ body {
   flex: 1;
   overflow-y: auto;
   padding: 8px 0;
+  min-height: 0;
 }
 
 .file-tree::-webkit-scrollbar {
@@ -718,6 +724,7 @@ body {
   flex-direction: column;
   background: var(--bg-primary);
   min-width: 0;
+  min-height: 0;
 }
 
 /* MarkReader 风格工具栏 */
@@ -1046,6 +1053,7 @@ body {
   flex-direction: column;
   overflow-y: auto;
   background: var(--bg-primary);
+  min-height: 0;
 }
 
 .editor-content-wrapper.hidden {
@@ -1626,6 +1634,8 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  height: 100%;
+  min-height: 0;
 }
 
 .outline-header {
@@ -1636,12 +1646,14 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
 }
 
 .outline-list {
   flex: 1;
   overflow-y: auto;
   padding: 8px 0;
+  min-height: 0;
 }
 
 .outline-list::-webkit-scrollbar {

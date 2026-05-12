@@ -1004,7 +1004,7 @@
     isOutlineEnabled = !isOutlineEnabled;
     const outlinePanel = document.getElementById('outline-panel');
     if (isOutlineEnabled) {
-      outlinePanel.style.display = 'block';
+      outlinePanel.style.display = 'flex';
     } else {
       outlinePanel.style.display = 'none';
     }
@@ -3628,6 +3628,11 @@
     html = html.replace(/~~([^~]*)~~/g, '<s>$1</s>');
 
     // 图片 - 必须在链接之前处理！防止 ! 被误识别为普通文本
+    // 支持 ![alt](src) |width:50% 格式
+    html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)\s*\|width:(\d+%)/g, (match, alt, src, width) => {
+      return `<img src="${src}" alt="${alt}" class="md-image" style="width:${width}">`;
+    });
+    // 普通图片（无宽度）
     html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" class="md-image">');
 
     // 链接
@@ -3945,10 +3950,33 @@
     // 链接
     md = md.replace(/<a[^>]+href="([^"]+)"[^>]*>([^<]+)<\/a>/g, '[$2]($1)');
 
-    // 图片
-    md = md.replace(/<img[^>]+src="([^"]+)"[^>]*alt="([^"]*)"[^>]*>/g, '![$2]($1)');
-    md = md.replace(/<img[^>]+alt="([^"]*)"[^>]*src="([^"]+)"[^>]*>/g, '![$1]($2)');
-    md = md.replace(/<img[^>]+src="([^"]+)"[^>]*>/g, '![]($1)');
+    // 图片 - 保留 style 属性（用于缩放）
+    md = md.replace(/<img([^>]+)>/g, (match, attrs) => {
+      const srcMatch = attrs.match(/src="([^"]*)"/);
+      const altMatch = attrs.match(/alt="([^"]*)"/);
+      const styleMatch = attrs.match(/style="([^"]*)"/);
+      if (!srcMatch) return match;
+      const src = srcMatch[1];
+      let alt = altMatch ? altMatch[1] : '';
+      // 提取宽度百分比
+      let widthPercent = '';
+      if (styleMatch) {
+        const widthMatch = styleMatch[1].match(/(?:max-?width|width)\s*:\s*([^;]+)/);
+        if (widthMatch) {
+          const width = widthMatch[1].trim();
+          if (width.endsWith('%')) {
+            widthPercent = width;
+            // 从 alt 中移除已有的宽度标记
+            alt = alt.replace(/\s*\|width:\d+%/g, '');
+          }
+        }
+      }
+      let result = `![${alt}](${src})`;
+      if (widthPercent) {
+        result += ` |width:${widthPercent}`;
+      }
+      return result;
+    });
 
     // 水平线
     md = md.replace(/<hr\s*\/?>/gi, '---\n');

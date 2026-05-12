@@ -23,6 +23,8 @@ dist/
 build/
 out/
 output/
+test/
+test-results/
 
 # 日志
 logs/
