@@ -227,7 +227,7 @@
     const savedOutline = localStorage.getItem('flowmark-outline-enabled');
     if (savedOutline === 'true') {
       isOutlineEnabled = true;
-      document.getElementById('outline-panel').style.display = 'block';
+      document.getElementById('outline-panel').style.display = 'flex';
       btnOutline.classList.add('active');
     } else {
       isOutlineEnabled = false;
