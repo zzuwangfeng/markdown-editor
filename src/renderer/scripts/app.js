@@ -67,6 +67,7 @@
   // 斜杠命令配置 - 输入 / 唤起命令面板
   // ========================================
   const slashCommands = [
+    { id: 'text', title: '普通文本', description: '普通段落', icon: '¶', action: () => insertPlainText() },
     { id: 'h1', title: '一级标题', description: '大标题', icon: 'H1', action: () => insertHeading(1) },
     { id: 'h2', title: '二级标题', description: '中标题', icon: 'H2', action: () => insertHeading(2) },
     { id: 'h3', title: '三级标题', description: '小标题', icon: 'H3', action: () => insertHeading(3) },
@@ -2241,6 +2242,7 @@
    */
   function executeMenuCommand(cmd) {
     const cmdMap = {
+      'text': () => insertPlainText(),
       'h1': () => insertHeading(1),
       'h2': () => insertHeading(2),
       'h3': () => insertHeading(3),
@@ -2282,7 +2284,42 @@
       hideSlashPanel();
     }
 
-    // 导航斜杠面板
+    // 按回车时，如果当前在特殊块元素（标题、代码块等）内，退出到普通段落
+    if (e.key === 'Enter') {
+      // 优先处理斜杠面板
+      if (slashPanelVisible) {
+        e.preventDefault();
+        executeSlashCommand();
+        return;
+      }
+      // 处理块元素内回车
+      const selection = window.getSelection();
+      if (selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        // 获取光标所在节点
+        let node = range.startContainer;
+        // 如果是文本节点，获取其父元素；否则直接用该元素
+        let element = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+        // 检查是否在块元素内（向上查找）
+        let blockElement = element?.closest('h1, h2, h3, h4, h5, h6, .code-block, blockquote, pre, ul, ol, table');
+        if (blockElement && editor.contains(blockElement)) {
+          e.preventDefault();
+          // 在块元素后插入新段落
+          const p = document.createElement('p');
+          p.innerHTML = '<br>';
+          blockElement.parentNode.insertBefore(p, blockElement.nextSibling);
+          // 移动光标到新段落中
+          const newRange = document.createRange();
+          newRange.setStart(p, 0);
+          newRange.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(newRange);
+          return;
+        }
+      }
+    }
+
+    // 斜杠面板导航
     if (slashPanelVisible) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -2292,11 +2329,6 @@
       if (e.key === 'ArrowUp') {
         e.preventDefault();
         navigateSlashPanel(-1);
-        return;
-      }
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        executeSlashCommand();
         return;
       }
     }
@@ -2380,6 +2412,13 @@
       const newScrollMax = editor.scrollHeight - editor.clientHeight;
       editor.scrollTop = newScrollMax * scrollPercent;
     });
+  }
+
+  /**
+   * 插入普通文本
+   */
+  function insertPlainText() {
+    insertHTMLAtCursor('<p><br></p>');
   }
 
   /**
