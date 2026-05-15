@@ -24,8 +24,10 @@
     "@electron-forge/maker-dmg": "^7.2.0",
     "@electron-forge/maker-zip": "^7.11.1",
     "@playwright/test": "^1.60.0",
+    "@types/jest": "^30.0.0",
     "electron": "^31.7.7",
-    "electron-builder": "^24.9.1"
+    "electron-builder": "^24.9.1",
+    "jest": "^30.4.2"
   },
   "build": {
     "appId": "com.flowmark.editor",
