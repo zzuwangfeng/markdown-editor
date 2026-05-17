@@ -2300,8 +2300,47 @@
         let node = range.startContainer;
         // 如果是文本节点，获取其父元素；否则直接用该元素
         let element = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
-        // 检查是否在块元素内（向上查找）
-        let blockElement = element?.closest('h1, h2, h3, h4, h5, h6, .code-block, blockquote, pre, ul, ol, table');
+
+        // 检查是否在列表项内
+        const listItem = element?.closest('li');
+        if (listItem && editor.contains(listItem)) {
+          e.preventDefault();
+          const list = listItem.parentElement;
+          // 检查当前列表项是否为空
+          const itemContent = listItem.innerHTML.trim();
+          const isEmptyItem = itemContent === '' || itemContent === '<br>';
+
+          if (isEmptyItem) {
+            // 空列表项：清除列表格式，转为普通段落
+            const p = document.createElement('p');
+            p.innerHTML = '<br>';
+            listItem.parentNode.replaceChild(p, listItem);
+            // 移动光标到新段落
+            const newRange = document.createRange();
+            newRange.setStart(p, 0);
+            newRange.collapse(true);
+            selection.removeAllRanges();
+            selection.addRange(newRange);
+          } else {
+            // 有内容的列表项：创建新的列表项
+            const newLi = document.createElement('li');
+            newLi.innerHTML = '<br>';
+            // 计算新的序号值（当前列表项数 + 1）
+            const itemCount = list.querySelectorAll('li').length;
+            newLi.setAttribute('value', itemCount + 1);
+            list.appendChild(newLi);
+            // 移动光标到新列表项
+            const newRange = document.createRange();
+            newRange.setStart(newLi, 0);
+            newRange.collapse(true);
+            selection.removeAllRanges();
+            selection.addRange(newRange);
+          }
+          return;
+        }
+
+        // 检查是否在块元素内（非列表）
+        let blockElement = element?.closest('h1, h2, h3, h4, h5, h6, .code-block, blockquote, pre, table');
         if (blockElement && editor.contains(blockElement)) {
           e.preventDefault();
           // 在块元素后插入新段落
@@ -2381,11 +2420,23 @@
 
     range.insertNode(fragment);
 
-    // 移动光标到插入内容之后
-    const lastNode = fragment.lastChild;
-    if (lastNode) {
-      range.setStartAfter(lastNode);
-      range.collapse(true);
+    // 移动光标到插入内容之后（如果是列表类块元素，移到其第一个可编辑子元素内）
+    const firstNode = fragment.firstChild;
+    if (firstNode) {
+      // 如果插入的是 ul/ol，将其第一个 li 的开头作为光标位置
+      if (firstNode.tagName === 'UL' || firstNode.tagName === 'OL') {
+        const firstLi = firstNode.querySelector('li');
+        if (firstLi) {
+          range.setStart(firstLi, 0);
+          range.collapse(true);
+        } else {
+          range.setStartAfter(firstNode);
+          range.collapse(true);
+        }
+      } else {
+        range.setStartAfter(firstNode);
+        range.collapse(true);
+      }
       selection.removeAllRanges();
       selection.addRange(range);
     }
@@ -2770,7 +2821,8 @@
     }
 
     const tag = type === 'ul' ? 'ul' : 'ol';
-    const html = `<${tag}><li></li></${tag}>`;
+    const valueAttr = type === 'ol' ? ' value="1"' : '';
+    const html = `<${tag}><li${valueAttr}></li></${tag}>`;
     insertHTMLAtCursor(html);
 
     requestAnimationFrame(() => {
@@ -3717,9 +3769,22 @@
 
     // 无序列表 - 必须在段落处理之前
     html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
+    // 包裹无序列表 <li> 在 <ul> 中
+    html = html.replace(/(<li>[\s\S]*?<\/li>(\s*<li>[\s\S]*?<\/li>)*)/g, (match) => {
+      return `<ul>${match}</ul>`;
+    });
 
-    // 有序列表
-    html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+    // 有序列表 - 需要保持原始序号
+    // 先替换每一行为 <li>，支持任意内容（包括嵌套标签）
+    html = html.replace(/^(\d+)\. (.*)$/gm, (match, num, text) => {
+      return `<li value="${num}">${text.trim()}</li>`;
+    });
+    // 收集连续的 <li value="..."> 并包裹在 <ol> 中
+    html = html.replace(/(?:<li value="\d+">[\s\S]*?<\/li>\s*)+/g, (match) => {
+      // 移除列表项之间的换行符，保留 li 标签内的结构
+      const cleanMatch = match.replace(/\n\s*/g, '');
+      return `<ol>${cleanMatch}</ol>`;
+    });
 
     // 段落处理 - 先按双换行分割
     const paragraphs = html.split(/\n{2,}/);
@@ -3733,18 +3798,28 @@
         const tagName = blockTagMatch[1].toLowerCase();
         const closingTag = '</' + tagName + '>';
         const hasClosingTag = p.includes(closingTag);
-        // 如果有闭合标签，检查标签后面是否还有非空白内容
+        // 如果段落以 ul/ol 开头但没有闭合标签（被 \n\n 分割），直接返回不处理
+        if (!hasClosingTag && /^<(ul|ol)/i.test(p)) {
+          return p;
+        }
+        // 如果有闭合标签，检查标签后面是否还有非空白内容（非块级标签内容）
         const afterClosing = hasClosingTag ? p.split(closingTag)[1] : p.slice(p.search(/\s|>|$/));
-        const hasContentAfter = /\S/.test(afterClosing);
-        if (hasClosingTag && !hasContentAfter) {
-          // 合并连续的 <li>...</li> 为 <ul>/<ol>
-          p = p.replace(/(<li>[^<]*<\/li>)(\s*<li>[^<]*<\/li>)+/g, (match) => {
+        // 检查 afterClosing 是否为空或只有空白/块级标签开头
+        const isPureBlock = !afterClosing.trim() || /^[<\s]/.test(afterClosing.trim());
+        // 只在块级元素为 li 时才处理列表合并（ul/ol 已包含 li，不再重复处理）
+        if (hasClosingTag && isPureBlock && tagName === 'li') {
+          // 无序列表：合并连续的 <li>...</li> 为 <ul>/<ol>
+          p = p.replace(/(<li>(?:[^<]|<\/?[^>]+>)*?<\/li>)(\s*<li>(?:[^<]|<\/?[^>]+>)*?<\/li>)+/g, (match) => {
             return `<ul>${match}</ul>`;
           });
-          // 包裹单独的 <li> 在 <ul> 中
-          p = p.replace(/(<li>[^<]*<\/li>)(?!\s*<li>)/g, (match) => {
+          // 无序列表：包裹单独的 <li> 在 <ul> 中
+          p = p.replace(/(<li>(?:[^<]|<\/?[^>]+>)*?<\/li>)(?!\s*<li>)/g, (match) => {
             return `<ul>${match}</ul>`;
           });
+          return p;
+        }
+        // 对于 ul/ol 容器，如果 isPureBlock 为 true，直接返回不处理
+        if (hasClosingTag && isPureBlock && (tagName === 'ul' || tagName === 'ol')) {
           return p;
         }
       }
@@ -4047,22 +4122,56 @@
       return result;
     });
 
+    // 段落处理 - 先将块级元素边界转换为特殊标记，避免被误处理
+    // 当块级元素被错误包裹在 <p> 标签内时，需要先将它们提取出来
+    md = md.replace(/<p>([\s\S]*?)<\/p>/gi, (match, content) => {
+      // 检查内容是否包含块级元素
+      if (/<(ul|ol|li|h[1-6]|blockquote|pre|hr|table)/i.test(content)) {
+        // 将块级元素提取到段落外，确保正确转换
+        return '<p>' + content.replace(/<(ul|ol|li)([^>]*)>[\s\S]*?<\/\1>/gi, '\n\n$&\n\n') + '</p>';
+      }
+      return match;
+    });
+
     // 水平线
     md = md.replace(/<hr\s*\/?>/gi, '---\n');
 
     // 引用
     md = md.replace(/<blockquote>([^<]+)<\/blockquote>/gi, '> $1\n');
 
+    // 列表 - 区分有序和无序列表 (必须在换行处理之前)
+    // 先处理有序列表 (需要跟踪序号)
+    const oliMatches = md.match(/<ol[^>]*>[\s\S]*?<\/ol>/gi);
+    if (oliMatches) {
+      oliMatches.forEach(olHtml => {
+        const liMatches = olHtml.match(/<li[^>]*>([\s\S]*?)<\/li>/gi);
+        if (liMatches) {
+          let mdItems = liMatches.map((li) => {
+            const idxMatch = li.match(/value="(\d+)"/);
+            const idx = idxMatch ? idxMatch[1] : '1';
+            const text = li.replace(/<[^>]+>/g, '');
+            return `${idx}. ${text}`;
+          });
+          const olMd = mdItems.join('\n');
+          md = md.replace(olHtml, olMd);
+        }
+      });
+    }
+    // 处理无序列表 - 先移除 ul 标签
+    md = md.replace(/<\/?ul>/gi, '');
+    // 先移除 li 之间的换行，避免重复换行符
+    md = md.replace(/<\/li>\s*\n\s*/gi, '</li>');
+    md = md.replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, (match, content) => {
+      const text = content.replace(/<[^>]+>/g, '');
+      return '- ' + text + '\n';
+    });
+
     // 换行
     md = md.replace(/<br\s*\/?>/gi, '\n');
 
-    // 段落
+    // 段落处理 - 将 </p><p> 转换为双换行
     md = md.replace(/<\/p><p>/gi, '\n\n');
     md = md.replace(/<p>([^<]*)<\/p>/gi, '$1\n\n');
-
-    // 列表
-    md = md.replace(/<\/?ul>|<\/?ol>/gi, '');
-    md = md.replace(/<li>([^<]+)<\/li>/gi, '- $1\n');
 
     // 移除剩余标签
     md = md.replace(/<[^>]+>/g, '');
