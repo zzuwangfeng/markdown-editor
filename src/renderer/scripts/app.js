@@ -2418,7 +2418,37 @@
    * 插入普通文本
    */
   function insertPlainText() {
-    insertHTMLAtCursor('<p><br></p>');
+    const selection = window.getSelection();
+    if (!selection.rangeCount) return;
+
+    // 获取当前光标所在的位置
+    const range = selection.getRangeAt(0);
+    let node = range.startContainer;
+    let element = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+
+    // 找到最近的块元素
+    let blockElement = element?.closest('h1, h2, h3, h4, h5, h6, .code-block, blockquote, pre, ul, ol, table, p, div');
+
+    // 创建一个干净的段落
+    const p = document.createElement('p');
+    p.innerHTML = '<br>';
+
+    if (blockElement && editor.contains(blockElement)) {
+      // 在块元素后插入新段落
+      blockElement.parentNode.insertBefore(p, blockElement.nextSibling);
+    } else {
+      // 在当前选区位置插入
+      range.collapse(true);
+      range.insertNode(p);
+    }
+
+    // 清除可能的内联格式：创建新选区到段落开头
+    const newRange = document.createRange();
+    // 选择整个段落内容，这样输入会替换掉并清除格式
+    newRange.selectNodeContents(p);
+    newRange.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(newRange);
   }
 
   /**
