@@ -144,6 +144,23 @@
               <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
             </svg>
           </button>
+          <span class="toolbar-sep">|</span>
+          <!-- Markdown 预览/代码切换 -->
+          <div class="md-view-toggle" id="md-view-toggle">
+            <button class="md-view-btn active" data-view="preview" id="btn-md-preview" title="预览">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M1 7s2-4 6-4 6 4 6 4-2 4-6 4-6-4-6-4z" stroke="currentColor" stroke-width="1.2"/>
+                <circle cx="7" cy="7" r="2" stroke="currentColor" stroke-width="1.2"/>
+              </svg>
+              <span>预览</span>
+            </button>
+            <button class="md-view-btn" data-view="code" id="btn-md-code" title="代码">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M4 3L1 7l3 4M10 3l3 4-3 4M8 2l-2 10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span>代码</span>
+            </button>
+          </div>
         </div>
         <div class="toolbar-right">
           <button class="toolbar-btn" id="btn-search" title="搜索 (Cmd+F)" style="display: none;">
@@ -244,6 +261,13 @@
           <div class="editor-content" id="editor" contenteditable="true" spellcheck="false">
             <p class="file-header-hint" id="file-header-hint">Type '/' for commands</p>
             <div class="editor-placeholder" id="editor-placeholder">开始输入，或按 / 唤起命令...</div>
+          </div>
+          <!-- Markdown 源码编辑器 -->
+          <div class="md-source-editor hidden" id="md-source-editor">
+            <div class="md-source-content-wrapper">
+              <div class="md-source-line-numbers" id="md-source-line-numbers"></div>
+              <textarea class="md-source-textarea" id="md-source-textarea" spellcheck="false" readonly placeholder="Markdown 源码只读，请在预览编辑器中编辑..."></textarea>
+            </div>
           </div>
           <div class="preview-content hidden" id="preview-content"></div>
         </div>

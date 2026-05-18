@@ -64,6 +64,9 @@
   let sidebarSearch, sidebarSearchInput, sidebarSearchClear;
   // 项目搜索面板元素
   let searchPanelProject, searchInputProject, searchCloseProject, searchResultsProject, searchInfoProject, searchClearProject;
+  // Markdown 预览/代码切换
+  let mdViewToggle, mdViewBtns, mdSourceEditor, mdSourceTextarea, mdSourceLineNumbers;
+  let currentMdView = 'preview'; // 'preview' | 'code'
 
   // ========================================
   // 斜杠命令配置 - 输入 / 唤起命令面板
@@ -197,6 +200,13 @@
     sidebarSearchInput = document.getElementById('sidebar-search-input');
     sidebarSearchClear = document.getElementById('sidebar-search-clear');
 
+    // Markdown 预览/代码切换元素
+    mdViewToggle = document.getElementById('md-view-toggle');
+    mdViewBtns = document.querySelectorAll('.md-view-btn');
+    mdSourceEditor = document.getElementById('md-source-editor');
+    mdSourceTextarea = document.getElementById('md-source-textarea');
+    mdSourceLineNumbers = document.getElementById('md-source-line-numbers');
+
     // 绑定所有事件监听器
     bindEvents();
 
@@ -262,6 +272,12 @@
     const savedView = localStorage.getItem('flowmark-view');
     if (savedView) {
       setViewMode(savedView);
+    }
+
+    // 恢复 Markdown 视图设置
+    const savedMdView = localStorage.getItem('flowmark-md-view');
+    if (savedMdView === 'code') {
+      switchMdView('code');
     }
 
     // 恢复持久化的工作区
@@ -730,6 +746,16 @@
     if (searchInput) searchInput.addEventListener('input', debounce(handleSearchInput, 300));
     if (searchClear) searchClear.addEventListener('click', clearSearch);
     if (searchClose) searchClose.addEventListener('click', hideSearchPanel);
+
+    // Markdown 预览/代码切换
+    mdViewBtns.forEach(btn => {
+      btn.addEventListener('click', () => switchMdView(btn.dataset.view));
+    });
+    
+    // 初始化按钮状态，确保默认预览模式的按钮显示激活状态
+    mdViewBtns.forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.view === currentMdView);
+    });
   }
 
   /**
@@ -1925,6 +1951,11 @@
 
     isLoading = true;
 
+    // 每次打开新文件默认显示预览模式
+    if (currentMdView !== 'preview') {
+      switchMdView('preview');
+    }
+
     currentFilePath = filePath;
     currentFileName = fileName;
     currentFileNameEl.textContent = fileName;
@@ -1969,6 +2000,12 @@
 
     updateOutline();
     updateStats();
+
+    // 如果源码编辑器显示，同步更新源码和行号
+    if (mdSourceEditor && mdSourceTextarea && currentMdView === 'code') {
+      mdSourceTextarea.value = processedContent;
+      updateLineNumbers(processedContent);
+    }
 
     // 加载完成
     isLoading = false;
@@ -2093,6 +2130,13 @@
       calculateReadingProgress();
 
       debouncedRenderPreview();
+
+      // 如果源码编辑器显示，同步更新源码和行号
+      if (mdSourceEditor && mdSourceTextarea && currentMdView === 'code') {
+        const markdown = htmlToMarkdown(editor.innerHTML);
+        mdSourceTextarea.value = markdown;
+        updateLineNumbers(markdown);
+      }
 
       if (saveTimeout) clearTimeout(saveTimeout);
       saveTimeout = setTimeout(() => {
@@ -3501,6 +3545,23 @@
   }
 
   /**
+   * 清理预览 HTML，移除空白元素
+   */
+  function cleanPreviewHTML(html) {
+    const blockTags = 'h[1-6]|p|ul|ol|blockquote|pre|div|table|hr|li';
+    html = html.replace(/<p><br\s*\/?><\/p>/gi, '');
+    html = html.replace(/<p>\s*<\/p>/gi, '');
+    html = html.replace(/<p>(&nbsp;|\s)*<\/p>/gi, '');
+    html = html.replace(/<div><br\s*\/?><\/div>/gi, '');
+    html = html.replace(/<div>\s*<\/div>/gi, '');
+    html = html.replace(new RegExp(`<\\/(${blockTags})>(\\s*<br\\s*\\/?>)+(\\s*)<(${blockTags})`, 'gi'), '</$1>$3<$4');
+    html = html.replace(/(<br\s*\/?>\s*){2,}/gi, '<br>');
+    html = html.replace(/^(<br\s*\/?>\s*)+/i, '');
+    html = html.replace(/(\s*<br\s*\/?>)+$/i, '');
+    return html;
+  }
+
+  /**
    * 渲染预览
    */
   function renderPreview() {
@@ -3515,11 +3576,9 @@
         return;
       }
 
-      // 获取编辑器内容
       const editorContent = editor.innerHTML;
       const placeholder = editor.querySelector('.editor-placeholder');
 
-      // 检查是否有实际内容（排除只有占位符的情况）
       const hasRealContent = editorContent && editorContent.length > 0 &&
         (!placeholder || !editorContent.includes(placeholder.outerHTML.trim()));
 
@@ -3528,22 +3587,19 @@
         return;
       }
 
-      // 克隆编辑器内容并清理占位符
       const clone = editor.cloneNode(true);
       const clonePlaceholder = clone.querySelector('.editor-placeholder');
       if (clonePlaceholder) clonePlaceholder.remove();
 
-      // 直接使用innerHTML
       let content = clone.innerHTML;
       if (!content || !content.trim()) {
         previewContent.innerHTML = '<div class="preview-empty">打开一个文件以预览内容</div>';
         return;
       }
 
-      // 设置预览内容
-      previewContent.innerHTML = content;
+      // 净化后设置预览内容
+      previewContent.innerHTML = cleanPreviewHTML(content);
 
-      // 调试日志
       console.log('Preview rendered, editor innerHTML length:', editor.innerHTML.length);
       console.log('Preview innerHTML:', previewContent.innerHTML.substring(0, 500));
     } catch (e) {
@@ -4023,6 +4079,9 @@
     // 规范化换行符：统一使用 \n
     html = html.replace(/\r\n?/g, '\n');
 
+    // 清理多余的空行 - 先预处理
+    html = html.replace(/\n{3,}/g, '\n\n');
+
     // 表格解析 - 必须在段落分割之前处理！
     html = parseMarkdownTable(html);
 
@@ -4195,11 +4254,14 @@
 
       // 否则包装成段落，单换行转<br>
       return `<p>${p.replace(/\n/g, '<br>')}</p>`;
-    }).join('');
+    }).join('\n');
 
-    // 清理
+    // 清理 - 更彻底的清理
     html = html.replace(/<p><\/p>/g, '');
-    html = html.replace(/<br><br>/g, '<br>');
+    html = html.replace(/<p><br\s*\/?><\/p>/gi, '');
+    html = html.replace(/<p>\s*<\/p>/gi, '');
+    html = html.replace(/(<br\s*\/?>\s*){2,}/gi, '<br>');
+    html = html.replace(/^\s+$/gm, '');
 
     return html;
   }
@@ -4621,6 +4683,80 @@
     md = md.trim();
 
     return md;
+  }
+
+  // ========================================
+  // Markdown 预览/代码切换
+  // ========================================
+
+  /**
+   * 切换 Markdown 预览/代码视图
+   */
+  function switchMdView(view) {
+    currentMdView = view;
+
+    // 更新按钮状态
+    mdViewBtns.forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.view === view);
+    });
+
+    if (view === 'code') {
+      // 切换到代码视图
+      showMdSourceEditor();
+    } else {
+      // 切换到预览视图
+      hideMdSourceEditor();
+    }
+
+    // 保存设置
+    localStorage.setItem('flowmark-md-view', view);
+  }
+
+  /**
+   * 更新行号显示
+   */
+  function updateLineNumbers(markdown) {
+    if (!mdSourceLineNumbers) return;
+
+    // 计算行数
+    const lines = markdown.split('\n');
+    let html = '';
+
+    for (let i = 1; i <= lines.length; i++) {
+      html += `<span class="md-source-line-number">${i}</span>`;
+    }
+
+    mdSourceLineNumbers.innerHTML = html;
+  }
+
+  /**
+   * 显示 Markdown 源码编辑器
+   */
+  function showMdSourceEditor() {
+    if (!currentFilePath || !editor) return;
+
+    // 同步内容到源码编辑器
+    const markdown = htmlToMarkdown(editor.innerHTML);
+    mdSourceTextarea.value = markdown;
+
+    // 更新行号
+    updateLineNumbers(markdown);
+
+    // 显示源码编辑器
+    mdSourceEditor.classList.remove('hidden');
+    editor.classList.add('hidden');
+
+    // 聚焦到 textarea
+    mdSourceTextarea.focus();
+  }
+
+  /**
+   * 隐藏 Markdown 源码编辑器
+   */
+  function hideMdSourceEditor() {
+    // 隐藏源码编辑器
+    mdSourceEditor.classList.add('hidden');
+    editor.classList.remove('hidden');
   }
 
   // ========================================
