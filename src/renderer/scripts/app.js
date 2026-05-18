@@ -30,6 +30,8 @@
   let currentTheme = 'light';        // 当前主题：light/dark/sepia
   let expandedFolders = new Set();   // 记录已展开的文件夹路径
   let savedCursorRange = null;       // 保存光标位置（用于表格等插入操作）
+  let lastEnterInEmptyCodeLine = false;  // 上一次回车是否在代码块空行
+  let isExitingCodeBlock = false;     // 正在退出代码块（防止递归）
 
   // ========================================
   // DOM 元素引用 - 在 init() 中初始化
@@ -2042,6 +2044,9 @@
 
     // 调试：记录保存的内容前200字符
     console.log('[saveCurrentFile] Markdown content (first 200):', content.substring(0, 200));
+    console.log('[saveCurrentFile] editor.innerHTML snippet:', editor.innerHTML.substring(0, 500));
+    console.log('[saveCurrentFile] Has .code-block-wrapper:', editor.innerHTML.includes('code-block-wrapper'));
+    console.log('[saveCurrentFile] Has .code-block:', editor.innerHTML.includes('code-block'));
 
     // 将图片绝对路径转换回相对路径再保存
     if (currentWorkspace) {
@@ -2313,6 +2318,36 @@
       hideSlashPanel();
     }
 
+    // 退格键：空代码块内删除整个代码块
+    if (e.key === 'Backspace') {
+      const selection = window.getSelection();
+      if (selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        let node = range.startContainer;
+        let element = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+        const codeBlock = element?.closest('.code-block');
+
+        if (codeBlock && editor.contains(codeBlock)) {
+          const codeText = codeBlock.textContent?.trim() || '';
+          // 只有空代码块才处理删除
+          if (codeText === '') {
+            e.preventDefault();
+            const wrapper = codeBlock.closest('.code-block-wrapper') || codeBlock;
+            const p = document.createElement('p');
+            p.innerHTML = '<br>';
+            wrapper.parentNode.replaceChild(p, wrapper);
+            const newRange = document.createRange();
+            newRange.setStart(p, 0);
+            newRange.collapse(true);
+            selection.removeAllRanges();
+            selection.addRange(newRange);
+            lastEnterInEmptyCodeLine = false;
+            return;
+          }
+        }
+      }
+    }
+
     // 按回车时，如果当前在特殊块元素（标题、代码块等）内，退出到普通段落
     if (e.key === 'Enter') {
       // 优先处理斜杠面板
@@ -2375,40 +2410,14 @@
           const selection = window.getSelection();
           if (selection.rangeCount > 0) {
             const range = selection.getRangeAt(0);
-
-            // 检查代码块最后是否有 <br>（表示刚按过回车）
-            const lastChild = codeBlock.lastChild;
-            const endsWithBr = lastChild && lastChild.nodeName === 'BR';
-
-            // 如果最后是 <br>（刚按过回车），则退出代码块；否则插入换行
-            if (endsWithBr) {
-              // 退出代码块，将光标移到代码块之后
-              if (codeBlock.nextSibling) {
-                const newRange = document.createRange();
-                newRange.setStartAfter(codeBlock);
-                newRange.collapse(true);
-                selection.removeAllRanges();
-                selection.addRange(newRange);
-              } else {
-                // 代码块是最后一个元素，创建新段落
-                const p = document.createElement('p');
-                p.innerHTML = '<br>';
-                codeBlock.parentNode.appendChild(p);
-                const newRange = document.createRange();
-                newRange.setStart(p, 0);
-                newRange.collapse(true);
-                selection.removeAllRanges();
-                selection.addRange(newRange);
-              }
-            } else {
-              // 插入换行
-              const br = document.createElement('br');
-              range.insertNode(br);
-              range.setStartAfter(br);
-              range.collapse(true);
-              selection.removeAllRanges();
-              selection.addRange(range);
-            }
+            const codeContent = codeBlock.querySelector('.code-content') || codeBlock;
+            // 在代码内容区内插入换行
+            const br = document.createElement('br');
+            range.insertNode(br);
+            range.setStartAfter(br);
+            range.collapse(true);
+            selection.removeAllRanges();
+            selection.addRange(range);
           }
           return;
         }
@@ -2444,8 +2453,8 @@
       }
     }
 
-    // 向下箭头：从代码块底部退出（当光标在代码块末尾时）
-    if (e.key === 'ArrowDown') {
+    // 方向键：从代码块退出
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
       const selection = window.getSelection();
       if (selection.rangeCount > 0) {
         const range = selection.getRangeAt(0);
@@ -2454,34 +2463,42 @@
         const codeBlock = element?.closest('.code-block');
 
         if (codeBlock && editor.contains(codeBlock)) {
-          const codeText = codeBlock.textContent || '';
-          if (codeText.length > 0) {
-            const preCaretRange = range.cloneRange();
-            preCaretRange.selectNodeContents(codeBlock);
-            preCaretRange.setEnd(range.startContainer, range.startOffset);
-            const textBeforeCursor = preCaretRange.toString();
+          // 使用 .code-content 进行行信息计算
+          const codeContent = codeBlock.querySelector('.code-content') || codeBlock;
+          const lineInfo = getLineInfo(codeContent, range.startContainer, range.startOffset);
 
-            // 如果光标在代码块末尾（且最后一行是空的），退出到代码块之后
-            const lastChild = codeBlock.lastChild;
-            const endsWithBr = lastChild && lastChild.nodeName === 'BR';
-            if (endsWithBr && textBeforeCursor.length >= codeText.length) {
+          // 向上箭头：代码块第一行行首时退出
+          if (e.key === 'ArrowUp') {
+            if (lineInfo.isFirstLine && lineInfo.isAtLineStart) {
               e.preventDefault();
-              if (codeBlock.nextSibling) {
-                const newRange = document.createRange();
-                newRange.setStartAfter(codeBlock);
-                newRange.collapse(true);
-                selection.removeAllRanges();
-                selection.addRange(newRange);
-              } else {
-                const p = document.createElement('p');
-                p.innerHTML = '<br>';
-                codeBlock.parentNode.appendChild(p);
-                const newRange = document.createRange();
-                newRange.setStart(p, 0);
-                newRange.collapse(true);
-                selection.removeAllRanges();
-                selection.addRange(newRange);
-              }
+              exitCodeBlock(codeBlock, 'before');
+              return;
+            }
+          }
+
+          // 向下箭头：代码块末尾时退出
+          if (e.key === 'ArrowDown') {
+            if (lineInfo.isLastLine && lineInfo.isAtLineEnd) {
+              e.preventDefault();
+              exitCodeBlock(codeBlock, 'after');
+              return;
+            }
+          }
+
+          // 向左箭头：代码块第一行行首时退出
+          if (e.key === 'ArrowLeft') {
+            if (lineInfo.isAtLineStart && lineInfo.isFirstLine) {
+              e.preventDefault();
+              exitCodeBlock(codeBlock, 'before');
+              return;
+            }
+          }
+
+          // 向右箭头：代码块最后一行行尾时退出
+          if (e.key === 'ArrowRight') {
+            if (lineInfo.isAtLineEnd && lineInfo.isLastLine) {
+              e.preventDefault();
+              exitCodeBlock(codeBlock, 'after');
               return;
             }
           }
@@ -2499,6 +2516,176 @@
 
     slashSelectedIndex = Math.max(0, Math.min(items.length - 1, slashSelectedIndex + direction));
     updateSlashSelection();
+  }
+
+  /**
+   * 退出代码块
+   * @param {HTMLElement} codeBlock - 代码块元素（.code-block）
+   * @param {string} direction - 'after' 退出到代码块之后，'before' 退出到代码块之前
+   */
+  function exitCodeBlock(codeBlock, direction = 'after') {
+    const selection = window.getSelection();
+    if (!selection.rangeCount) return;
+
+    // 防止递归
+    if (isExitingCodeBlock) return;
+    isExitingCodeBlock = true;
+
+    // 找到代码块包装容器
+    const wrapper = codeBlock.closest('.code-block-wrapper') || codeBlock;
+
+    // 清除代码块末尾的空 <br>
+    const codeContent = wrapper.querySelector('.code-content');
+    if (codeContent) {
+      while (codeContent.lastChild && codeContent.lastChild.nodeName === 'BR') {
+        codeContent.removeChild(codeContent.lastChild);
+      }
+    }
+
+    if (direction === 'after') {
+      if (wrapper.nextSibling) {
+        const newRange = document.createRange();
+        newRange.setStartAfter(wrapper.nextSibling);
+        newRange.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(newRange);
+      } else {
+        const p = document.createElement('p');
+        p.innerHTML = '<br>';
+        wrapper.parentNode.appendChild(p);
+        const newRange = document.createRange();
+        newRange.setStart(p, 0);
+        newRange.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(newRange);
+      }
+    } else {
+      if (wrapper.previousSibling) {
+        const newRange = document.createRange();
+        newRange.setStartAfter(wrapper.previousSibling);
+        newRange.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(newRange);
+      } else {
+        const p = document.createElement('p');
+        p.innerHTML = '<br>';
+        wrapper.parentNode.insertBefore(p, wrapper);
+        const newRange = document.createRange();
+        newRange.setStart(p, 0);
+        newRange.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(newRange);
+      }
+    }
+
+    // 重置状态
+    lastEnterInEmptyCodeLine = false;
+    isExitingCodeBlock = false;
+  }
+
+  /**
+   * 获取代码块内光标位置的行信息
+   */
+  function getLineInfo(cb, cursorNode, cursorOffset) {
+    let lineNumber = 0;
+    let isFirstLine = true;
+    let isLastLine = true;
+    let isAtLineStart = false;
+    let isAtLineEnd = false;
+
+    let foundCursor = false;
+    let charCountInCurrentLine = 0;
+    let totalTextLen = 0;
+    let hasBr = false;
+
+    // 计算代码块总文本长度和是否有换行
+    for (let child = cb.firstChild; child; child = child.nextSibling) {
+      if (child.nodeName === 'BR') {
+        hasBr = true;
+      } else if (child.nodeType === Node.TEXT_NODE) {
+        totalTextLen += child.textContent.length;
+      }
+    }
+
+    // 遍历子节点，确定光标所在行
+    for (let child = cb.firstChild; child; child = child.nextSibling) {
+      if (!foundCursor && (child === cursorNode || (cursorNode.nodeType === Node.TEXT_NODE && child.contains && child.contains(cursorNode)))) {
+        foundCursor = true;
+      }
+
+      if (child.nodeName === 'BR') {
+        if (foundCursor) {
+          // 光标后的第一个 <br>，说明上一行已结束
+          isLastLine = true;
+          break;
+        }
+        lineNumber++;
+        charCountInCurrentLine = 0;
+        isFirstLine = false;
+      } else if (child.nodeType === Node.TEXT_NODE) {
+        const textLen = child.textContent.length;
+        charCountInCurrentLine += textLen;
+
+        if (foundCursor && !isAtLineEnd) {
+          if (cursorNode === child) {
+            isAtLineEnd = (cursorOffset >= textLen);
+            isAtLineStart = (cursorOffset === 0);
+          } else if (cursorNode.nodeType === Node.TEXT_NODE && child.contains && child.contains(cursorNode)) {
+            // 光标在子节点内部
+            isAtLineEnd = false;
+            isAtLineStart = false;
+          }
+        }
+      }
+
+      if (child.nextSibling === null) {
+        isLastLine = true;
+      }
+    }
+
+    // 如果没有 <br>，则是单行
+    if (!hasBr) {
+      isFirstLine = true;
+      isLastLine = true;
+      // 单行时，检查是否在行首或行尾
+      if (foundCursor) {
+        const preCaretRange = document.createRange();
+        preCaretRange.selectNodeContents(cb);
+        preCaretRange.setEnd(cursorNode, cursorOffset);
+        const textBeforeCursor = preCaretRange.toString();
+        isAtLineStart = (textBeforeCursor.length === 0);
+        isAtLineEnd = (textBeforeCursor.length >= totalTextLen);
+      }
+    } else if (!foundCursor) {
+      // 光标不在任何子节点中（可能在代码块末尾）
+      isAtLineEnd = true;
+    }
+
+    return { lineNumber, isFirstLine, isLastLine, isAtLineStart, isAtLineEnd };
+  }
+
+  /**
+   * 检查代码内容区某一行是否为空（只有 <br> 或空文本）
+   */
+  function isLineEmpty(codeContent, lineNumber) {
+    let currentLine = 0;
+    for (let child = codeContent.firstChild; child; child = child.nextSibling) {
+      if (child.nodeName === 'BR') {
+        if (currentLine === lineNumber) {
+          return true; // 空行只有 <br>
+        }
+        currentLine++;
+      } else if (child.nodeType === Node.TEXT_NODE) {
+        if (currentLine === lineNumber && child.textContent.trim() === '') {
+          return true;
+        }
+      }
+    }
+    // 最后一行
+    if (currentLine === lineNumber) {
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -2728,63 +2915,65 @@
   }
 
   /**
-   * 插入代码块（使用 div 替代 pre 以支持 ContentEditable）
+   * 插入代码块
+   * 结构：```language\n\n code area \n\n```
    */
   function insertCodeBlock() {
+    console.log('[insertCodeBlock] called');
     const selection = window.getSelection();
 
     // 检查是否在已有的代码块内
     let inCodeBlock = false;
-    if (selection.rangeCount > 0 && editor.contains(selection.anchorNode)) {
+    if (selection.rangeCount > 0 && selection.anchorNode && editor.contains(selection.anchorNode)) {
       const node = selection.anchorNode;
       if (node.parentElement && node.parentElement.classList.contains('code-block')) {
         inCodeBlock = true;
       }
     }
 
-    // 保存滚动百分比
-    const scrollMax = editor.scrollHeight - editor.clientHeight;
-    const scrollPercent = scrollMax > 0 ? editor.scrollTop / scrollMax : 0;
-
     if (inCodeBlock) {
-      // 已经在代码块内，直接插入换行
       insertHTMLAtCursor('<br>');
       return;
     }
 
-    // 保存当前光标位置
-    if (selection.rangeCount > 0 && editor.contains(selection.anchorNode)) {
-      savedCursorRange = selection.getRangeAt(0).cloneRange();
-    }
+    // 直接插入代码块
+    doInsertCodeBlock();
+  }
 
-    // 不在代码块内，插入新的代码块
-    // 使用 div.code-block 替代 pre.code-block，便于在 ContentEditable 中编辑
+  function doInsertCodeBlock() {
+    const selection = window.getSelection();
+
+    // 保存滚动百分比
+    const scrollMax = editor.scrollHeight - editor.clientHeight;
+    const scrollPercent = scrollMax > 0 ? editor.scrollTop / scrollMax : 0;
+
+    // 创建代码块包装容器
+    const wrapper = document.createElement('div');
+    wrapper.className = 'code-block-wrapper';
+
+    // 创建代码块主体（可编辑区）
     const codeBlock = document.createElement('div');
     codeBlock.className = 'code-block';
     codeBlock.contentEditable = 'true';
 
-    // 插入到当前光标位置
-    if (savedCursorRange) {
-      selection.removeAllRanges();
-      selection.addRange(savedCursorRange);
-      const range = selection.getRangeAt(0);
-      range.deleteContents();
-      range.insertNode(codeBlock);
+    // 代码内容行（带换行）
+    const codeContent = document.createElement('div');
+    codeContent.className = 'code-content';
+    codeContent.innerHTML = '<br>';
+    codeBlock.appendChild(codeContent);
 
-      // 将光标移到代码块内部（在开头位置）
-      const newRange = document.createRange();
-      newRange.setStart(codeBlock, 0);
-      newRange.collapse(true);
-      selection.removeAllRanges();
-      selection.addRange(newRange);
-    } else {
-      editor.appendChild(codeBlock);
-      const newRange = document.createRange();
-      newRange.setStart(codeBlock, 0);
-      newRange.collapse(true);
-      selection.removeAllRanges();
-      selection.addRange(newRange);
-    }
+    wrapper.appendChild(codeBlock);
+
+    // 插入到编辑器末尾
+    editor.appendChild(wrapper);
+
+    // 将光标移到代码内容行的 <br> 之后（编辑区内）
+    const newRange = document.createRange();
+    newRange.setStart(codeContent, 0);
+    newRange.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(newRange);
+    codeBlock.focus();
 
     // 延迟恢复滚动位置
     requestAnimationFrame(() => {
@@ -3834,9 +4023,6 @@
     // 规范化换行符：统一使用 \n
     html = html.replace(/\r\n?/g, '\n');
 
-    // 调试：记录原始内容前200字符
-    console.log('[markdownToHtml] Original (first 200):', html.substring(0, 200));
-
     // 表格解析 - 必须在段落分割之前处理！
     html = parseMarkdownTable(html);
 
@@ -3909,8 +4095,7 @@
           if (isCloserOnly && trimmed.length >= codeBlockQuotes) {
             // End code block
             const content = codeBlockContent.join('\n');
-            console.log('[markdownToHtml] code block content:', JSON.stringify(content));
-            result.push('<pre class="code-block"><code>' + content + '</code></pre>');
+            result.push('<div class="code-block-wrapper"><pre class="code-block"><code>' + content + '</code></pre></div>');
             inCodeBlock = false;
             codeBlockQuotes = 0;
             codeBlockContent = [];
@@ -3993,42 +4178,19 @@
       return `<ol>${cleanMatch}</ol>`;
     });
 
-    // 段落处理 - 先按双换行分割
+    
+    // 段落处理 - 按双换行分割，保留块级元素的完整性
+    const blockTags = ['pre', 'blockquote', 'ul', 'ol', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'div', 'table'];
+    const blockPattern = new RegExp(`^(<(?:${blockTags.join('|')})[^>]*>[\\s\\S]*?</(?:${blockTags.join('|')})>)`, 'i');
+
     const paragraphs = html.split(/\n{2,}/);
     html = paragraphs.map(p => {
       p = p.trim();
       if (!p) return '';
 
-      // 如果是纯块级标签（标签后无其他内容），不处理；否则包装成段落
-      const blockTagMatch = p.match(/^<(h[1-6]|blockquote|pre|ul|ol|li|hr|div|table)[^>]*>/i);
-      if (blockTagMatch) {
-        const tagName = blockTagMatch[1].toLowerCase();
-        const closingTag = '</' + tagName + '>';
-        const hasClosingTag = p.includes(closingTag);
-        // 如果段落以 ul/ol 开头但没有闭合标签（被 \n\n 分割），直接返回不处理
-        if (!hasClosingTag && /^<(ul|ol)/i.test(p)) {
-          return p;
-        }
-        // 如果有闭合标签，检查标签后面是否还有非空白内容（非块级标签内容）
-        const afterClosing = hasClosingTag ? p.split(closingTag)[1] : p.slice(p.search(/\s|>|$/));
-        // 检查 afterClosing 是否为空或只有空白/块级标签开头
-        const isPureBlock = !afterClosing.trim() || /^[<\s]/.test(afterClosing.trim());
-        // 只在块级元素为 li 时才处理列表合并（ul/ol 已包含 li，不再重复处理）
-        if (hasClosingTag && isPureBlock && tagName === 'li') {
-          // 无序列表：合并连续的 <li>...</li> 为 <ul>/<ol>
-          p = p.replace(/(<li>(?:[^<]|<\/?[^>]+>)*?<\/li>)(\s*<li>(?:[^<]|<\/?[^>]+>)*?<\/li>)+/g, (match) => {
-            return `<ul>${match}</ul>`;
-          });
-          // 无序列表：包裹单独的 <li> 在 <ul> 中
-          p = p.replace(/(<li>(?:[^<]|<\/?[^>]+>)*?<\/li>)(?!\s*<li>)/g, (match) => {
-            return `<ul>${match}</ul>`;
-          });
-          return p;
-        }
-        // 对于 ul/ol 容器，如果 isPureBlock 为 true，直接返回不处理
-        if (hasClosingTag && isPureBlock && (tagName === 'ul' || tagName === 'ol')) {
-          return p;
-        }
+      // 如果是纯块级元素，不处理
+      if (blockPattern.test(p)) {
+        return p;
       }
 
       // 否则包装成段落，单换行转<br>
@@ -4046,9 +4208,7 @@
    * 解析 Markdown 表格 - 按行解析，正确处理多个相邻表格
    */
   function parseMarkdownTable(html) {
-    console.log('[DEBUG parseMarkdownTable] Input:\n' + html);
     const lines = html.split('\n');
-    console.log('[DEBUG parseMarkdownTable] Total lines: ' + lines.length);
     const result = [];
     let i = 0;
     let pendingColWidths = null;
@@ -4064,7 +4224,6 @@
         const rowMatch = trimmedLine.match(/rowheights:([^|]+)/);
         pendingColWidths = dimMatch ? dimMatch[1].split(',').map(w => w ? parseInt(w) : null) : [];
         pendingRowHeights = rowMatch ? rowMatch[1].split(',').map(h => h ? parseInt(h) : null) : [];
-        console.log('[DEBUG parseMarkdownTable] Found dims: colWidths=' + JSON.stringify(pendingColWidths) + ', rowHeights=' + JSON.stringify(pendingRowHeights));
         i++;
         continue;
       }
@@ -4278,13 +4437,20 @@
     });
 
     // 代码块 - 使用 DOM 解析确保正确处理（避免正则匹配问题）
-    const cbBlocks = tempDiv.querySelectorAll('.code-block');
-    cbBlocks.forEach(cb => {
-      // 先获取内部 HTML，将 <br> 替换为换行符，再去除剩余标签
-      let innerHtml = cb.innerHTML;
-      console.log('[htmlToMarkdown] code-block innerHTML:', JSON.stringify(innerHtml));
+    const cbWrappers = tempDiv.querySelectorAll('.code-block-wrapper');
+    const cbPres = tempDiv.querySelectorAll('pre.code-block');
+    console.log('[htmlToMarkdown] Found', cbWrappers.length, 'code block wrappers,', cbPres.length, 'pre.code-block');
+    const codeBlockReplacements = [];
+
+    cbWrappers.forEach(wrapper => {
+      const codeBlock = wrapper.querySelector('.code-block');
+      const codeContent = codeBlock ? codeBlock.querySelector('.code-content') : wrapper.querySelector('.code-content');
+      const langLine = wrapper.querySelector('.code-lang-line');
+      const lang = langLine ? langLine.textContent.trim() : '';
+
+      // 获取代码内容
+      let innerHtml = codeContent ? codeContent.innerHTML : (codeBlock ? codeBlock.innerHTML : wrapper.innerHTML);
       innerHtml = innerHtml.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '');
-      console.log('[htmlToMarkdown] code-block content after replace:', JSON.stringify(innerHtml));
       const content = innerHtml;
 
       // 计算需要的反引号数量
@@ -4293,10 +4459,53 @@
         quoteCount++;
       }
       const quotes = '`'.repeat(quoteCount);
-      const codeMd = quotes + '\n' + content + '\n' + quotes;
+      // 如果有语言标识，放在 ``` 后面
+      const codeMd = lang ? `${quotes}${lang}\n${content}\n${quotes}` : `${quotes}\n${content}\n${quotes}`;
 
-      // 替换原始 HTML 为 markdown
-      md = md.split(cb.outerHTML).join(codeMd);
+      console.log('[htmlToMarkdown] code-block found, outerHTML:', wrapper.outerHTML);
+      console.log('[htmlToMarkdown] converted to:', codeMd);
+
+      // 收集 HTML 和对应的 markdown
+      codeBlockReplacements.push({
+        html: wrapper.outerHTML,
+        md: codeMd
+      });
+    });
+
+    // 处理 <pre class="code-block"> 格式（从 markdownToHtml 转换而来）
+    cbPres.forEach(pre => {
+      const codeEl = pre.querySelector('code');
+      let content = codeEl ? codeEl.textContent : pre.textContent;
+      // 清理可能残留的 <br> 换行
+      content = content.replace(/<br\s*\/?>/gi, '\n').trim();
+
+      // 计算需要的反引号数量
+      let quoteCount = 3;
+      while (content.includes('`'.repeat(quoteCount)) && quoteCount < 10) {
+        quoteCount++;
+      }
+      const quotes = '`'.repeat(quoteCount);
+      const codeMd = `${quotes}\n${content}\n${quotes}`;
+
+      console.log('[htmlToMarkdown] pre.code-block found, outerHTML:', pre.outerHTML);
+      console.log('[htmlToMarkdown] converted to:', codeMd);
+
+      codeBlockReplacements.push({
+        html: pre.outerHTML,
+        md: codeMd
+      });
+    });
+
+    // 按 HTML 长度降序排列（先替换更长的 HTML，防止短 HTML 被长 HTML 包含）
+    codeBlockReplacements.sort((a, b) => b.html.length - a.html.length);
+
+    // 依次替换
+    codeBlockReplacements.forEach(({ html, md: codeMd }) => {
+      const oldMd = md;
+      md = md.split(html).join(codeMd);
+      if (oldMd !== md) {
+        console.log('[htmlToMarkdown] replaced HTML with markdown');
+      }
     });
 
     // 行内代码
