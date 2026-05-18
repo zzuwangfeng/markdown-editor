@@ -23,6 +23,12 @@
   --transition: 200ms ease;
   --transition-fast: 150ms ease;
   --transition-slow: 300ms ease;
+  --code-text: #333333;
+  --code-border: #eaeaea;
+  --code-lang-color: #999999;
+  --code-scrollbar-thumb: #d9d9d9;
+  --code-scrollbar-hover: #bbbbbb;
+  --code-selection: #d7d9f9;
 }
 
 /* 深色主题 */
@@ -39,6 +45,12 @@
   --accent: #0D7CF0;
   --accent-hover: #4090F0;
   --accent-light: #264F78;
+  --code-text: #c9d1d9;
+  --code-border: #30363d;
+  --code-lang-color: #8b949e;
+  --code-scrollbar-thumb: #30363d;
+  --code-scrollbar-hover: #484f58;
+  --code-selection: #264f78;
 }
 
 /* 护眼 Sepia 主题 */
@@ -55,6 +67,12 @@
   --accent: #8B7355;
   --accent-hover: #7A6548;
   --accent-light: #E8DCC8;
+  --code-text: #5b4636;
+  --code-border: #d4c4a8;
+  --code-lang-color: #a08b74;
+  --code-scrollbar-thumb: #d4c4a8;
+  --code-scrollbar-hover: #bfaf93;
+  --code-selection: #dbc8a8;
 }
 
 /* Reset */
@@ -1423,18 +1441,74 @@ body {
   margin: 0 0 16px;
 }
 
-.editor-content .code-block {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  padding: 12px 16px;
+/* 代码块 - Typora 原生极简风格（支持主题切换） */
+.editor-content .code-block-wrapper {
   margin: 12px 0;
-  font-family: var(--font-mono);
+  border: 1px solid var(--code-border);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-primary);
+}
+
+.editor-content .code-lang-line {
+  font-family: Consolas, "PingFang SC", monospace;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--code-lang-color);
+  background: transparent;
+  text-align: right;
+  padding: 4px 15px 0;
+  border: none;
+  user-select: none;
+}
+
+.editor-content .code-block {
+  background: var(--bg-primary);
+  color: var(--code-text);
+  border: none;
+  border-radius: 0;
+  padding: 8px 15px;
+  margin: 0;
+  font-family: Consolas, "PingFang SC", monospace;
   font-size: 14px;
   line-height: 1.5;
-  white-space: pre-wrap;
-  word-wrap: break-word;
+  white-space: pre;
+  word-wrap: normal;
   outline: none;
+  overflow-x: auto;
+  tab-size: 4;
+  caret-color: var(--code-text);
+}
+
+.editor-content .code-block code {
+  background: none;
+  padding: 0;
+  color: inherit;
+  border: none;
+  font-family: inherit;
+  font-size: inherit;
+  outline: none;
+}
+
+.editor-content .code-block ::selection {
+  background: var(--code-selection);
+}
+
+.editor-content .code-block ::-webkit-scrollbar {
+  height: 4px;
+}
+
+.editor-content .code-block ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.editor-content .code-block ::-webkit-scrollbar-thumb {
+  background: var(--code-scrollbar-thumb);
+  border-radius: 2px;
+}
+
+.editor-content .code-block ::-webkit-scrollbar-thumb:hover {
+  background: var(--code-scrollbar-hover);
 }
 
 .editor-content th {
@@ -1565,39 +1639,93 @@ body {
   border: 1px solid var(--border-color);
 }
 
-/* 代码块 - 深色主题，类似 VS Code */
-.preview-content pre,
-.preview-content .code-block {
-  margin: 14px 0;
-  padding: 14px 16px;
-  background: #1e1e1e;
-  color: #d4d4d4;
-  border-radius: var(--radius-md);
-  overflow-x: auto;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  line-height: 1.6;
+/* 代码块 - Typora 原生极简风格（支持主题切换） */
+.preview-content .code-block-wrapper {
+  margin: 12px 0;
+  border: 1px solid var(--code-border);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-primary);
 }
 
-.preview-content pre code {
+.preview-content .code-lang-line {
+  font-family: Consolas, "PingFang SC", monospace;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--code-lang-color);
+  background: transparent;
+  text-align: right;
+  padding: 4px 15px 0;
+  border: none;
+  line-height: 1.4;
+  user-select: none;
+}
+
+.preview-content .code-block-wrapper pre,
+.preview-content .code-block-wrapper .code-block {
+  margin: 0;
+  padding: 8px 15px;
+  background: var(--bg-primary);
+  color: var(--code-text);
+  border: none;
+  border-radius: 0;
+  overflow-x: auto;
+  font-family: Consolas, "PingFang SC", monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre;
+  word-wrap: normal;
+  tab-size: 4;
+}
+
+.preview-content .code-block code,
+.preview-content .code-block-wrapper code {
   background: none;
   padding: 0;
   color: inherit;
   border: none;
+  font-family: inherit;
+  font-size: inherit;
 }
 
-.preview-content pre::-webkit-scrollbar {
-  height: 8px;
+/* 独立的 pre/code-block（无 wrapper）*/
+.preview-content pre:not(.code-block-wrapper pre),
+.preview-content .code-block:not(.code-block-wrapper .code-block) {
+  margin: 12px 0;
+  padding: 8px 15px;
+  background: var(--bg-primary);
+  color: var(--code-text);
+  border: 1px solid var(--code-border);
+  border-radius: 3px;
+  overflow-x: auto;
+  font-family: Consolas, "PingFang SC", monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre;
+  word-wrap: normal;
+  tab-size: 4;
 }
 
-.preview-content pre::-webkit-scrollbar-track {
-  background: #2d2d2d;
-  border-radius: 4px;
+/* 滚动条 - Typora 极细风格 */
+.preview-content pre::-webkit-scrollbar,
+.preview-content .code-block::-webkit-scrollbar {
+  height: 4px;
 }
 
-.preview-content pre::-webkit-scrollbar-thumb {
-  background: #555;
-  border-radius: 4px;
+.preview-content pre::-webkit-scrollbar-track,
+.preview-content .code-block::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.preview-content pre::-webkit-scrollbar-thumb,
+.preview-content .code-block::-webkit-scrollbar-thumb {
+  background: var(--code-scrollbar-thumb);
+  border-radius: 2px;
+}
+
+.preview-content pre::-webkit-scrollbar-thumb:hover,
+.preview-content .code-block::-webkit-scrollbar-thumb:hover {
+  background: var(--code-scrollbar-hover);
 }
 
 /* 表格 */
@@ -2866,6 +2994,7 @@ body {
   min-height: 0;
   overflow: hidden;
   position: relative;
+  background: var(--bg-primary);
 }
 
 /* 行号显示 */
