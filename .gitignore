@@ -3,6 +3,10 @@ node_modules/
 vendor/
 .pnp/
 .pnp.js
+.claude/
+.trae/
+.vscode/
+
 
 # 编辑器配置
 .idea/
@@ -38,3 +42,15 @@ yarn-error.log*
 .temp/
 .tmp/
 .cache/
+
+# 其他
+codeblock-demo.md
+architecture-diagram.html
+CODE_WIKI.md
+CLAUDE.md
+PROJECT_INTRO.md
+README.md
+SPEC.md
+app-new.js
+jest.config.js
+playwright.config.js
