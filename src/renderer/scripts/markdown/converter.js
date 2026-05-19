@@ -12,10 +12,16 @@
       return '\x00CB' + (codeBlocks.length - 1) + '\x00';
     });
 
+    var inlineCodes = [];
+    html = html.replace(/<code[^>]*>[\s\S]*?<\/code>/gi, function(match) {
+      inlineCodes.push(match);
+      return '\x00IC' + (inlineCodes.length - 1) + '\x00';
+    });
+
     var blockTags = 'h[1-6]|p|ul|ol|blockquote|pre|div|table|hr|li';
     html = html.replace(/<p><br\s*\/?><\/p>/gi, '');
-    html = html.replace(/<p>\s*<\/p>/gi, '');
-    html = html.replace(/<p>(&nbsp;|\s)*<\/p>/gi, '');
+    html = html.replace(/<p><\/p>/gi, '');
+    html = html.replace(/<p>(&nbsp;|\s)+<\/p>/gi, '');
     html = html.replace(/<div><br\s*\/?><\/div>/gi, '');
     html = html.replace(/<div>\s*<\/div>/gi, '');
     html = html.replace(new RegExp('<\\/(' + blockTags + ')>(\\s*<br\\s*\\/?>)+(\\s*)<(' + blockTags + ')', 'gi'), '</$1>$3<$4');
@@ -23,8 +29,11 @@
     html = html.replace(/^(<br\s*\/?>\s*)+/i, '');
     html = html.replace(/(\s*<br\s*\/?>)+$/i, '');
 
-    for (var i = 0; i < codeBlocks.length; i++) {
-      html = html.replace('\x00CB' + i + '\x00', codeBlocks[i]);
+    for (var i = 0; i < inlineCodes.length; i++) {
+      html = html.replace('\x00IC' + i + '\x00', inlineCodes[i]);
+    }
+    for (var j = 0; j < codeBlocks.length; j++) {
+      html = html.replace('\x00CB' + j + '\x00', codeBlocks[j]);
     }
     return html;
   }
