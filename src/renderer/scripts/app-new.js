@@ -1,9 +1,11 @@
 // FlowMark Editor - 入口文件
-// 模块架构: state → converter → 各模块 → 本文件
+// 模块化架构：state.js → 各模块 → 本文件
 (function() {
   'use strict';
 
   const App = window.__App;
+  const S = App.state;
+  const D = App.dom;
 
   async function init() {
     if (document.readyState === 'loading') {

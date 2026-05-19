@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>FlowMark Editor 架构图示</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: #0d1117;
+      color: #c9d1d9;
+      padding: 40px 20px;
+    }
+    h1 {
+      text-align: center;
+      font-size: 28px;
+      margin-bottom: 8px;
+      color: #f0f6fc;
+    }
+    .subtitle {
+      text-align: center;
+      color: #8b949e;
+      margin-bottom: 40px;
+      font-size: 14px;
+    }
+    .section {
+      max-width: 1200px;
+      margin: 0 auto 48px;
+    }
+    .section h2 {
+      font-size: 20px;
+      color: #58a6ff;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #21262d;
+    }
+    .section h2 .badge {
+      display: inline-block;
+      background: #1f6feb33;
+      color: #58a6ff;
+      font-size: 12px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      margin-left: 10px;
+      vertical-align: middle;
+      font-weight: normal;
+    }
+    .mermaid-wrapper {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 24px;
+      overflow-x: auto;
+    }
+    .desc {
+      color: #8b949e;
+      font-size: 13px;
+      margin-bottom: 12px;
+      line-height: 1.6;
+    }
+    hr { border: none; border-top: 1px solid #21262d; margin: 48px 0; }
+  </style>
+</head>
+<body>
+  <h1>FlowMark Editor 代码执行逻辑加载图示</h1>
+  <p class="subtitle">Electron 渲染进程 — IIFE 模块化 + window.__App 共享上下文</p>
+
+  <!-- ==================== 1. 模块加载顺序 ==================== -->
+  <div class="section">
+    <h2>1. 模块加载顺序与依赖图 <span class="badge">index.html → 21 个 JS 模块</span></h2>
+    <p class="desc">
+      所有模块通过 <code>&lt;script src="..."&gt;</code> 顺序加载，每个模块是 IIFE 闭包 <code>(function(App){...})(window.__App)</code>，
+      最后以 <code>App.模块名 = { fn1, fn2 }</code> 导出。模块只能引用前面已加载模块的导出。
+    </p>
+    <div class="mermaid-wrapper">
+      <pre class="mermaid">
+graph TB
+    subgraph L0["Layer 0: 基础层"]
+      state["state.js<br/>App.state / App.dom"]
+    end
+
+    subgraph L1["Layer 1: 通用工具"]
+      converter["converter.js<br/>App.converter"]
+      global_["global.js<br/>App.core_global"]
+    end
+
+    subgraph L2["Layer 2: Markdown &amp; 主题"]
+      preview["preview.js<br/>App.markdown_preview"]
+      theme["theme.js<br/>App.theme"]
+      dialogs["dialogs.js<br/>App.dialogs"]
+      search["search.js<br/>App.search"]
+    end
+
+    subgraph L3["Layer 3: UI 组件"]
+      sidebar["sidebar.js<br/>App.sidebar"]
+      panels["panels.js<br/>App.panels"]
+      ctx_menu["context-menu.js<br/>App.context_menu"]
+      table_ctx["table-context.js<br/>App.table_context"]
+      table["table.js<br/>App.table"]
+    end
+
+    subgraph L4["Layer 4: 文件系统"]
+      watcher["file-watcher.js<br/>App.file_file_watcher"]
+      file_tree["file-tree.js<br/>App.file_file_tree"]
+      file_ops["file-operations.js<br/>App.file_file_operations"]
+    end
+
+    subgraph L5["Layer 5: 编辑器核心"]
+      insert_ops["insert-ops.js<br/>App.editor_insert_ops"]
+      insert_special["insert-special.js<br/>App.editor_insert_special"]
+      content["content.js<br/>App.editor_content"]
+      slash["slash-commands.js<br/>App.editor_slash_commands"]
+      code_block["code-block.js<br/>App.editor_code_block"]
+      keyboard["keyboard.js<br/>App.editor_keyboard"]
+    end
+
+    subgraph L6["Layer 6: 源码编辑"]
+      source_editor["source-editor.js<br/>App.markdown_source_editor"]
+    end
+
+    subgraph L7["Layer 7: 组装层"]
+      events["events.js<br/>App.core_events"]
+    end
+
+    subgraph L8["Layer 8: 启动"]
+      init["init.js<br/>App.core_init"]
+      app_js["app.js"]
+    end
+
+    state --> converter
+    state --> global_
+    state --> preview
+    state --> theme
+    state --> dialogs
+    converter --> content
+    converter --> file_ops
+    converter --> source_editor
+    global_ --> content
+    global_ --> events
+    global_ --> search
+    theme --> panels
+    theme --> source_editor
+    dialogs --> code_block
+    dialogs --> events
+    sidebar --> events
+    panels --> events
+    file_ops --> events
+    file_ops --> content
+    insert_ops --> code_block
+    insert_ops --> content
+    insert_special --> events
+    content --> events
+    content --> code_block
+    code_block --> keyboard
+    slash --> keyboard
+    keyboard --> events
+    source_editor --> events
+    source_editor --> content
+    events --> init
+    init --> app_js
+
+    style L0 fill:#1f3626,stroke:#2ea043
+    style L1 fill:#1f3626,stroke:#2ea043
+    style L2 fill:#1a2639,stroke:#1f6feb
+    style L3 fill:#1a2639,stroke:#1f6feb
+    style L4 fill:#271d2e,stroke:#8250df
+    style L5 fill:#2e1c1c,stroke:#da3633
+    style L6 fill:#271d2e,stroke:#8250df
+    style L7 fill:#2e2410,stroke:#d29922
+    style L8 fill:#2e2410,stroke:#d29922
+      </pre>
+    </div>
+  </div>
+
+  <!-- ==================== 2. 事件绑定流 ==================== -->
+  <div class="section">
+    <h2>2. 事件绑定流程 <span class="badge">init.js → events.js → DOM</span></h2>
+    <p class="desc">
+      启动流程：<code>app.js</code> 调用 <code>App.core_init.init()</code> → <code>doInit()</code> 先收集所有 DOM 元素到 <code>App.dom.*</code>，再调用 <code>App.core_events.bindEvents()</code> 注册全部事件监听器。
+    </p>
+    <div class="mermaid-wrapper">
+      <pre class="mermaid">
+sequenceDiagram
+    participant HTML as index.html
+    participant APP as app.js
+    participant INIT as init.js (doInit)
+    participant DOM as App.dom.*
+    participant EVENTS as events.js (bindEvents)
+    participant EL as DOM Elements
+
+    HTML->>APP: 最后加载 app.js
+    APP->>INIT: App.core_init.init()
+    INIT->>INIT: DOMContentLoaded 就绪?
+    INIT->>DOM: 收集 50+ DOM 元素引用
+    Note over INIT,DOM: editor, sidebar, preview, dialog, etc.
+    INIT->>EVENTS: App.core_events.bindEvents()
+    EVENTS->>EL: 注册 click / keydown / input / paste 事件
+    Note over EVENTS,EL: editor.addEventListener('keydown', handleEditorKeydown)
+    EVENTS->>EL: 注册 contextmenu / dialog 事件
+    EVENTS->>EL: 注册 zoom / theme / sidebar 切换事件
+    EVENTS-->>INIT: 事件绑定完成
+    INIT->>INIT: theme.restoreUserSettings()
+    INIT->>INIT: updateOutline() / renderRecentFiles()
+    INIT-->>APP: 初始化完成
+      </pre>
+    </div>
+  </div>
+
+  <!-- ==================== 3. 代码块键盘处理完整流 ==================== -->
+  <div class="section">
+    <h2>3. 代码块键盘处理完整流程 <span class="badge">keyboard.js + code-block.js</span></h2>
+    <p class="desc">
+      用户在代码块内按方向键 / Enter / Backspace 的完整处理链路。
+    </p>
+    <div class="mermaid-wrapper">
+      <pre class="mermaid">
+flowchart TD
+    START(["用户在 editor 中按键"]) --> KD["keydown 事件冒泡到 App.dom.editor"]
+    KD --> HANDLE["App.editor_keyboard.handleEditorKeydown(e)"]
+
+    HANDLE --> CHECK_SLASH{"e.key === '/'<br/>&& !slashPanelVisible?"}
+    CHECK_SLASH -->|是| SHOW_PANEL["showSlashPanel()"] --> RETURN1([return])
+    CHECK_SLASH -->|否| CHECK_ESC{"e.key === 'Escape'<br/>&& slashPanelVisible?"}
+    CHECK_ESC -->|是| HIDE_PANEL["hideSlashPanel()"]
+
+    CHECK_ESC --> CHECK_BS{"e.key === 'Backspace'<br/>&& 在空代码块内?"}
+    CHECK_BS -->|是| DEL_BLOCK["删除整个 code-block-wrapper<br/>替换为 &lt;p&gt;"]
+    CHECK_BS -->|否| CHECK_ENTER{"e.key === 'Enter'?"}
+
+    CHECK_ENTER -->|是| ENTER_SLASH{"slashPanelVisible?"}
+    ENTER_SLASH -->|是| EXEC_SLASH["executeSlashCommand()"]
+    ENTER_SLASH -->|否| ENTER_LIST{"在 li 内?"}
+    ENTER_LIST -->|是| HANDLE_LIST["空列表项→转为p<br/>有内容→新建li"]
+    ENTER_LIST -->|否| ENTER_CODE{"在 .code-block 内?"}
+    ENTER_CODE -->|是| ENTER_CALL["getLineInfo(code, cursorNode, offset)"]
+    ENTER_CALL --> ENTER_CHECK{"isLastLine && isAtLineEnd?"}
+    ENTER_CHECK -->|是| EXIT_AFTER["exitCodeBlock('after')"]
+    ENTER_CHECK -->|否| INSERT_BR["正常插入 &lt;br&gt; 换行"]
+
+    CHECK_ENTER --> CHECK_ARROW{"ArrowUp/Down/Left/Right?"}
+    CHECK_ARROW -->|是| ARROW_SLASH{"slashPanelVisible?"}
+    ARROW_SLASH -->|是| NAV_PANEL["navigateSlashPanel()"]
+    ARROW_SLASH -->|否| ARROW_CODE{"在 .code-block 内?"}
+    ARROW_CODE -->|否| RETURN2([浏览器默认行为])
+    ARROW_CODE -->|是| GET_INFO["getLineInfo(code, cursorNode, offset)"]
+
+    GET_INFO --> ARROW_UP{"ArrowUp?"}
+    ARROW_UP -->|firstLine && lineStart| EXIT_BEFORE["exitCodeBlock('before')"]
+    GET_INFO --> ARROW_DOWN{"ArrowDown?"}
+    ARROW_DOWN -->|lastLine && lineEnd| EXIT_AFTER2["exitCodeBlock('after')"]
+    GET_INFO --> ARROW_LEFT{"ArrowLeft?"}
+    ARROW_LEFT -->|firstLine && lineStart| EXIT_BEFORE2["exitCodeBlock('before')"]
+    GET_INFO --> ARROW_RIGHT{"ArrowRight?"}
+    ARROW_RIGHT -->|lastLine && lineEnd| EXIT_AFTER3["exitCodeBlock('after')"]
+
+    style EXIT_AFTER fill:#2ea043,color:#fff
+    style EXIT_BEFORE fill:#2ea043,color:#fff
+    style EXIT_AFTER2 fill:#2ea043,color:#fff
+    style EXIT_BEFORE2 fill:#2ea043,color:#fff
+    style EXIT_AFTER3 fill:#2ea043,color:#fff
+    style DEL_BLOCK fill:#da3633,color:#fff
+    style GET_INFO fill:#1f6feb,color:#fff
+    style ENTER_CALL fill:#1f6feb,color:#fff
+      </pre>
+    </div>
+  </div>
+
+  <!-- ==================== 4. getLineInfo 详细逻辑 ==================== -->
+  <div class="section">
+    <h2>4. getLineInfo() 光标行信息计算 <span class="badge">code-block.js — 核心函数</span></h2>
+    <p class="desc">
+      该函数判断光标在代码块中的行号、是否首行/末行、是否行首/行尾。红框部分为本次修复新增的 <code>ELEMENT_NODE</code> 边界处理逻辑。
+    </p>
+    <div class="mermaid-wrapper">
+      <pre class="mermaid">
+flowchart TD
+    GLI_START(["getLineInfo(cb, cursorNode, cursorOffset)"]) --> FIND_CODE["codeEl = cb.querySelector('code') || cb"]
+
+    FIND_CODE --> CHECK_ELEM{"cursorNode 是<br/>ELEMENT_NODE<br/>且在 codeEl 内部?"}
+
+    CHECK_ELEM -->|"是 (offset===0)"| FIND_FIRST["遍历 codeEl.firstChild"]
+    FIND_FIRST --> FIRST_TEXT{"找到 TEXT_NODE?"}
+    FIRST_TEXT -->|是| RESOLVE_START["修正 cursorNode=该文本<br/>cursorOffset=0"]
+    FIRST_TEXT -->|否(BR)"| RET_START["返回: isFirstLine=true<br/>isAtLineStart=true"]
+
+    CHECK_ELEM -->|"是 (offset>=childCount)"| FIND_LAST["遍历 codeEl.lastChild"]
+    FIND_LAST --> LAST_TEXT{"找到 TEXT_NODE?"}
+    LAST_TEXT -->|是| RESOLVE_END["修正 cursorNode=该文本<br/>cursorOffset=text.length"]
+    LAST_TEXT -->|否(BR)"| RET_END["返回: isLastLine=true<br/>isAtLineEnd=true"]
+
+    CHECK_ELEM -->|否| PASS1["第一遍遍历: 统计 hasBr / totalTextLen"]
+
+    RESOLVE_START --> PASS1
+    RESOLVE_END --> PASS1
+
+    PASS1 --> PASS2["第二遍遍历: 定位光标所在行"]
+    PASS2 --> CHILD_LOOP{"遍历 codeEl 每个 child"}
+    CHILD_LOOP -->|"child === cursorNode<br/>或 child.contains(cursorNode)"| FOUND["foundCursor = true"]
+    CHILD_LOOP -->|"BR 节点"| BR_CHECK{"foundCursor?"}
+    BR_CHECK -->|是| BR_FOUND["当前就是最后一行→跳出"]
+    BR_CHECK -->|否| BR_ADV["lineNumber++<br/>isFirstLine = false"]
+    CHILD_LOOP -->|"TEXT_NODE"| TXT_CHECK{"foundCursor?"}
+    TXT_CHECK -->|是| CALC_POS["isAtLineEnd = offset>=textLen<br/>isAtLineStart = offset===0"]
+    TXT_CHECK -->|否| TXT_NEXT["charCount += textLen"]
+
+    FOUND --> CHILD_LOOP
+    BR_FOUND --> POST
+    BR_ADV --> CHILD_LOOP
+    CALC_POS --> CHILD_LOOP
+    TXT_NEXT --> CHILD_LOOP
+
+    CHILD_LOOP -->|遍历完毕| POST["后处理"]
+
+    POST --> NOBR{"!hasBr?"}
+    NOBR -->|是| NOBR_FIX["isFirstLine=true, isLastLine=true<br/>用 Range API 精确计算<br/>isAtLineStart / isAtLineEnd"]
+    NOBR -->|否| NOBR_NOT{"!foundCursor?"}
+    NOBR_NOT -->|是| SET_END["isAtLineEnd = true"]
+    NOBR_NOT -->|否| DONE
+
+    NOBR_FIX --> DONE
+    SET_END --> DONE
+
+    DONE(["返回 { lineNumber, isFirstLine,<br/>isLastLine, isAtLineStart,<br/>isAtLineEnd }"])
+
+    style CHECK_ELEM fill:#da3633,color:#fff
+    style FIND_FIRST fill:#da3633,color:#fff
+    style FIND_LAST fill:#da3633,color:#fff
+    style RET_START fill:#da3633,color:#fff
+    style RET_END fill:#da3633,color:#fff
+    style RESOLVE_START fill:#d29922,color:#000
+    style RESOLVE_END fill:#d29922,color:#000
+    style NOBR_FIX fill:#1f6feb,color:#fff
+  </pre>
+  </div>
+  </div>
+
+  <!-- ==================== 5. exitCodeBlock 流程 ==================== -->
+  <div class="section">
+    <h2>5. exitCodeBlock() 退出逻辑 <span class="badge">code-block.js</span></h2>
+    <p class="desc">
+      从代码块退出到前/后段落。使用 <code>isExitingCodeBlock</code> 互斥锁 + try-finally 保证状态释放。
+    </p>
+    <div class="mermaid-wrapper">
+      <pre class="mermaid">
+flowchart TD
+    EXIT_START(["exitCodeBlock(codeBlock, direction)"]) --> CHECK_RANGE{"selection.rangeCount?"}
+    CHECK_RANGE -->|0| RETURN_E([return])
+    CHECK_RANGE -->|>0| CHECK_LOCK{"isExitingCodeBlock?"}
+    CHECK_LOCK -->|true| RETURN_E
+    CHECK_LOCK -->|false| SET_LOCK["isExitingCodeBlock = true"]
+
+    SET_LOCK --> TRY["try {"]
+    TRY --> FIND_WRAP["wrapper = codeBlock.closest('.code-block-wrapper')"]
+    FIND_WRAP --> CLEAN_BR["清理 codeEl 末尾多余 BR"]
+    CLEAN_BR --> DIR{"direction?"}
+
+    DIR -->|"after"| CHECK_NEXT{"wrapper.nextSibling?"}
+    CHECK_NEXT -->|存在| SET_AFTER["setStartAfter(wrapper)"]
+    CHECK_NEXT -->|不存在| NEW_P["创建 &lt;p&gt;&lt;br&gt;&lt;/p&gt;<br/>appendChild 到 editor"]
+
+    DIR -->|"before"| CHECK_PREV{"wrapper.previousSibling?"}
+    CHECK_PREV -->|存在| SET_AFTER_PREV["setStartAfter(wrapper.previousSibling)"]
+    CHECK_PREV -->|不存在| NEW_P_PREV["创建 &lt;p&gt;&lt;br&gt;&lt;/p&gt;<br/>insertBefore wrapper"]
+
+    SET_AFTER --> FOCUS["更新 selection 到新位置"]
+    NEW_P --> FOCUS
+    SET_AFTER_PREV --> FOCUS
+    NEW_P_PREV --> FOCUS
+
+    FOCUS --> FINALLY["finally {"]
+    FINALLY --> UNLOCK["isExitingCodeBlock = false"]
+    UNLOCK --> DONE_EXIT(["完成"])
+
+    style SET_LOCK fill:#d29922,color:#000
+    style FINALLY fill:#2ea043,color:#fff
+    style UNLOCK fill:#2ea043,color:#fff
+      </pre>
+    </div>
+  </div>
+
+  <!-- ==================== 6. 完整调用链 ==================== -->
+  <div class="section">
+    <h2>6. 代码块光标退出完整调用链 <span class="badge">端到端追踪</span></h2>
+    <p class="desc">
+      从用户按方向键到最终光标移出代码块的完整链路（以 ArrowDown 为例）。
+    </p>
+    <div class="mermaid-wrapper">
+      <pre class="mermaid">
+sequenceDiagram
+    participant User as 用户
+    participant Browser as 浏览器
+    participant Keyboard as keyboard.js<br/>handleEditorKeydown
+    participant CB as code-block.js<br/>getLineInfo
+    participant Exit as code-block.js<br/>exitCodeBlock
+    participant DOM as DOM
+
+    User->>Browser: 在代码块末尾按 ↓
+    Browser->>Keyboard: keydown 事件 (ArrowDown)
+    Keyboard->>Keyboard: selection.getRangeAt(0)
+    Keyboard->>Keyboard: startContainer → cursorNode
+    Keyboard->>Keyboard: element.closest('.code-block')
+
+    alt 不在代码块内
+        Keyboard-->>Browser: 不处理，浏览器默认行为
+    else 在代码块内
+        Keyboard->>Keyboard: codeContent = codeBlock.querySelector('code')
+        Keyboard->>CB: getLineInfo(code, cursorNode, cursorOffset)
+
+        rect rgb(218, 54, 51, 0.15)
+            Note over CB: ★ 修复点: cursorNode 是 ELEMENT_NODE?
+            alt cursorNode === codeEl && offset>=childCount
+                CB-->>Keyboard: { isLastLine: true, isAtLineEnd: true }
+            else cursorNode 是 text node
+                CB->>CB: 遍历 childNodes 定位光标行
+                CB-->>Keyboard: { isLastLine, isAtLineEnd }
+            end
+        end
+
+        alt isLastLine && isAtLineEnd
+            Keyboard->>Keyboard: e.preventDefault()
+            Keyboard->>Exit: exitCodeBlock(codeBlock, 'after')
+            Exit->>Exit: isExitingCodeBlock = true
+            Exit->>DOM: 清理尾部 BR
+            alt wrapper.nextSibling 存在
+                Exit->>DOM: setStartAfter(wrapper)
+            else wrapper 是最后一个元素
+                Exit->>DOM: 创建 <p> 追加到 editor
+            end
+            Exit->>Exit: isExitingCodeBlock = false
+            Note over User,DOM: ✅ 光标成功移出代码块
+        else 不在边界
+            Keyboard-->>Browser: 不处理
+            Note over Browser: 浏览器在代码块内移动光标
+        end
+    end
+      </pre>
+    </div>
+  </div>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'dark',
+      themeVariables: {
+        primaryColor: '#1f6feb',
+        primaryTextColor: '#c9d1d9',
+        primaryBorderColor: '#30363d',
+        lineColor: '#58a6ff',
+        secondaryColor: '#161b22',
+        tertiaryColor: '#0d1117',
+      },
+      flowchart: {
+        useMaxWidth: true,
+        htmlLabels: true,
+        curve: 'basis',
+      },
+      sequence: {
+        useMaxWidth: true,
+        messageAlign: 'center',
+        mirrorActors: false,
+      },
+    });
+  </script>
+</body>
+</html>
