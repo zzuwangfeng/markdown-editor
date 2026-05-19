@@ -47,11 +47,12 @@
         return;
       }
 
-      // 净化后设置预览内容
       App.dom.previewContent.innerHTML = App.converter.cleanPreviewHTML(content);
 
-      console.log('Preview rendered, App.dom.editor innerHTML length:', App.dom.editor.innerHTML.length);
-      console.log('Preview innerHTML:', App.dom.previewContent.innerHTML.substring(0, 500));
+      const previewCodes = App.dom.previewContent.querySelectorAll('.code-block code');
+      for (var cj = 0; cj < previewCodes.length; cj++) {
+        previewCodes[cj].removeAttribute('contenteditable');
+      }
     } catch (e) {
       console.error('renderPreview error:', e);
       App.dom.previewContent.innerHTML = '<div class="preview-empty">预览渲染失败</div>';

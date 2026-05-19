@@ -55,6 +55,8 @@
       selection.removeAllRanges();
       selection.addRange(range);
     }
+
+    App.editor_content.handleEditorInput();
   }
 
   function insertHeading(level) {

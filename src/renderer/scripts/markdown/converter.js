@@ -6,6 +6,12 @@
    * 清理预览 HTML，移除空白元素
    */
   function cleanPreviewHTML(html) {
+    var codeBlocks = [];
+    html = html.replace(/<pre class="code-block"><code[^>]*>[\s\S]*?<\/code><\/pre>/gi, function(match) {
+      codeBlocks.push(match);
+      return '\x00CB' + (codeBlocks.length - 1) + '\x00';
+    });
+
     var blockTags = 'h[1-6]|p|ul|ol|blockquote|pre|div|table|hr|li';
     html = html.replace(/<p><br\s*\/?><\/p>/gi, '');
     html = html.replace(/<p>\s*<\/p>/gi, '');
@@ -16,6 +22,10 @@
     html = html.replace(/(<br\s*\/?>\s*){2,}/gi, '<br>');
     html = html.replace(/^(<br\s*\/?>\s*)+/i, '');
     html = html.replace(/(\s*<br\s*\/?>)+$/i, '');
+
+    for (var i = 0; i < codeBlocks.length; i++) {
+      html = html.replace('\x00CB' + i + '\x00', codeBlocks[i]);
+    }
     return html;
   }
 
@@ -31,6 +41,7 @@
 
     for (var i = 0; i < lines.length; i++) {
       var line = lines[i];
+      line = line.replace(/[\u200B\u200C\u200D\uFEFF]/g, '');
       var trimmed = line.trim();
 
       // 检查是否是表格分隔行
@@ -80,7 +91,7 @@
         html += '<tr>';
         cells.forEach((cell, cellIndex) => {
           var tag = inHeader ? 'th' : 'td';
-          html += '<' + tag + '><div class="cell-content">' + cell + '</div>';
+          html += '<' + tag + '><div class="cell-content">' + processTableCellContent(cell) + '</div>';
           if (cellIndex < cells.length - 1) {
             html += '<div class="col-resize-handle"></div>';
           }
@@ -108,9 +119,24 @@
     var inCodeBlock = false;
     var codeBlockLang = '';
     var codeBlockContent = [];
+    var inListType = null;
+    var listItemsBuffer = [];
+
+    function flushList() {
+      if (!inListType || listItemsBuffer.length === 0) return;
+      var listHtml = '<' + inListType + '>';
+      for (var k = 0; k < listItemsBuffer.length; k++) {
+        listHtml += '<li>' + listItemsBuffer[k] + '</li>';
+      }
+      listHtml += '</' + inListType + '>';
+      result.push(listHtml);
+      inListType = null;
+      listItemsBuffer = [];
+    }
 
     for (var i = 0; i < lines.length; i++) {
       var line = lines[i];
+      line = line.replace(/[\u200B\u200C\u200D\uFEFF]/g, '');
       if (/^<table/.test(line.trim())) {
         result.push(line);
         continue;
@@ -120,10 +146,13 @@
       var codeBlockMatch = line.match(/^\s*```(\w*)\s*$/);
       if (codeBlockMatch) {
         if (inCodeBlock) {
+          var codeLines = codeBlockContent.length > 0 ? codeBlockContent.join('\n') : '';
+          var escapedLines = escapeHTML(codeLines);
+          var hasContent = escapedLines.length > 0;
           result.push(
             '<div class="code-block-wrapper">' +
             (codeBlockLang ? '<div class="code-lang-line">' + codeBlockLang + '</div>' : '') +
-            '<pre class="code-block"><code>' + escapeHTML(codeBlockContent.join('\n')) + '</code></pre>' +
+            '<pre class="code-block"><code contenteditable="true">' + (hasContent ? escapedLines.replace(/\n/g, '<br>') : '<br>') + '</code></pre>' +
             '</div>'
           );
           inCodeBlock = false;
@@ -167,19 +196,34 @@
         line = line.replace(/^\s*>\s*/, '');
         line = '<blockquote>' + line + '</blockquote>';
       }
-      // 无序列表 - * 
-      if (/^\s*[-*]\s+/.test(line)) {
-        line = line.replace(/^\s*[-*]\s+/, '');
-        line = '<ul><li>' + line + '</li></ul>';
-      }
-      // 有序列表 1.
-      if (/^\s*\d+\.\s+/.test(line)) {
-        line = line.replace(/^\s*\d+\.\s+/, '');
-        line = '<ol><li>' + line + '</li></ol>';
-      }
+      var isUnordered = /^\s*[-*]\s+/.test(line);
+      var isOrdered = /^\s*\d+\.\s+/.test(line);
 
-      result.push(line);
+      if (isUnordered || isOrdered) {
+        var listType = isUnordered ? 'ul' : 'ol';
+        if (isUnordered) {
+          line = line.replace(/^\s*[-*]\s+/, '');
+        } else {
+          line = line.replace(/^\s*\d+\.\s+/, '');
+        }
+
+        if (inListType !== listType) {
+          flushList();
+        }
+        inListType = listType;
+        listItemsBuffer.push(line);
+      } else {
+        flushList();
+        if (line.trim() === '') {
+        } else if (/^<(h[1-6]|hr|blockquote)[\s>]/.test(line)) {
+          result.push(line);
+        } else {
+          result.push('<p>' + line + '</p>');
+        }
+      }
     }
+
+    flushList();
 
     return result.join('\n');
   }
@@ -243,7 +287,8 @@
           case 'div':
             if (node.classList.contains('code-block-wrapper')) {
               var pre = node.querySelector('pre');
-              var code = pre ? pre.textContent : '';
+              var code = pre ? getCodeBlockText(pre) : '';
+              code = code.replace(/\n+$/, '');
               var langLine = node.querySelector('.code-lang-line');
               var lang = langLine ? langLine.textContent : '';
               md += '```' + lang + '\n' + code + '\n```\n\n';
@@ -272,6 +317,29 @@
     var div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  function processTableCellContent(cell) {
+    var escaped = escapeHTML(cell);
+    escaped = escaped.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+    escaped = escaped.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    escaped = escaped.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    escaped = escaped.replace(/`([^`]+)`/g, '<code>$1</code>');
+    return escaped;
+  }
+
+  function getCodeBlockText(pre) {
+    var code = pre.querySelector('code') || pre;
+    var text = '';
+    for (var i = 0; i < code.childNodes.length; i++) {
+      var child = code.childNodes[i];
+      if (child.nodeType === Node.TEXT_NODE) {
+        text += child.textContent;
+      } else if (child.nodeName === 'BR') {
+        text += '\n';
+      }
+    }
+    return text;
   }
 
   function processInlineElements(node) {

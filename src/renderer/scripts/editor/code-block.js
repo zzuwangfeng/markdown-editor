@@ -19,41 +19,45 @@
         }
       }
 
+      const newRange = document.createRange();
+
       if (direction === 'after') {
-        if (wrapper.nextSibling) {
-          const newRange = document.createRange();
-          newRange.setStartAfter(wrapper);
+        var next = wrapper.nextSibling;
+        if (next) {
+          if (next.nodeType === Node.ELEMENT_NODE && next.childNodes.length > 0) {
+            newRange.setStart(next, 0);
+          } else {
+            newRange.setStartAfter(wrapper);
+          }
           newRange.collapse(true);
-          selection.removeAllRanges();
-          selection.addRange(newRange);
         } else {
-          const p = document.createElement('p');
+          var p = document.createElement('p');
           p.innerHTML = '<br>';
           wrapper.parentNode.appendChild(p);
-          const newRange = document.createRange();
           newRange.setStart(p, 0);
           newRange.collapse(true);
-          selection.removeAllRanges();
-          selection.addRange(newRange);
         }
       } else {
-        if (wrapper.previousSibling) {
-          const newRange = document.createRange();
-          newRange.setStartAfter(wrapper.previousSibling);
-          newRange.collapse(true);
-          selection.removeAllRanges();
-          selection.addRange(newRange);
+        var prev = wrapper.previousSibling;
+        if (prev) {
+          if (prev.nodeType === Node.ELEMENT_NODE && prev.childNodes.length > 0) {
+            newRange.selectNodeContents(prev);
+            newRange.collapse(false);
+          } else {
+            newRange.setStartAfter(prev);
+            newRange.collapse(true);
+          }
         } else {
-          const p = document.createElement('p');
+          var p = document.createElement('p');
           p.innerHTML = '<br>';
           wrapper.parentNode.insertBefore(p, wrapper);
-          const newRange = document.createRange();
           newRange.setStart(p, 0);
           newRange.collapse(true);
-          selection.removeAllRanges();
-          selection.addRange(newRange);
         }
       }
+      selection.removeAllRanges();
+      selection.addRange(newRange);
+      App.dom.editor.focus();
     } finally {
       App.state.isExitingCodeBlock = false;
     }
@@ -67,6 +71,7 @@
     let isAtLineEnd = false;
 
     let foundCursor = false;
+    let passedCursor = false;
     let charCountInCurrentLine = 0;
     let totalTextLen = 0;
     let hasBr = false;
@@ -126,8 +131,7 @@
 
       if (child.nodeName === 'BR') {
         if (foundCursor) {
-          isLastLine = true;
-          break;
+          passedCursor = true;
         }
         lineNumber++;
         charCountInCurrentLine = 0;
@@ -136,7 +140,7 @@
         const textLen = child.textContent.length;
         charCountInCurrentLine += textLen;
 
-        if (foundCursor && !isAtLineEnd) {
+        if (foundCursor && !isAtLineEnd && !passedCursor) {
           if (cursorNode === child) {
             isAtLineEnd = (cursorOffset >= textLen);
             isAtLineStart = (cursorOffset === 0);
@@ -145,7 +149,7 @@
       }
 
       if (child.nextSibling === null) {
-        isLastLine = true;
+        isLastLine = !passedCursor || child === cursorNode;
       }
     }
 
@@ -167,6 +171,18 @@
     return { lineNumber, isFirstLine, isLastLine, isAtLineStart, isAtLineEnd };
   }
 
+  function insertBRInCodeBlock() {
+    const selection = window.getSelection();
+    if (!selection.rangeCount) return;
+    const range = selection.getRangeAt(0);
+    const br = document.createElement('br');
+    range.insertNode(br);
+    range.setStartAfter(br);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+
   function insertCodeBlock() {
     const selection = window.getSelection();
 
@@ -179,16 +195,21 @@
     }
 
     if (inCodeBlock) {
-      App.editor_insert_ops.insertHTMLAtCursor('\n');
+      insertBRInCodeBlock();
       return;
     }
 
+    let savedRange = null;
+    if (selection.rangeCount > 0 && App.dom.editor.contains(selection.anchorNode)) {
+      savedRange = selection.getRangeAt(0).cloneRange();
+    }
+
     App.dialogs.showDialog('代码块语言', '输入语言名称（如 python、javascript，留空则无）', (lang) => {
-      doInsertCodeBlock(lang.trim());
+      doInsertCodeBlock(lang.trim(), savedRange);
     });
   }
 
-  function doInsertCodeBlock(language) {
+  function doInsertCodeBlock(language, savedRange) {
     language = language || '';
     const selection = window.getSelection();
 
@@ -215,16 +236,22 @@
 
     wrapper.appendChild(pre);
 
-    // 在光标位置插入
     let inserted = false;
-    if (selection.rangeCount > 0 && App.dom.editor.contains(selection.anchorNode)) {
-      const range = selection.getRangeAt(0);
-      if (range.commonAncestorContainer === App.dom.editor ||
-          App.dom.editor.contains(range.commonAncestorContainer)) {
-        range.deleteContents();
-        range.insertNode(wrapper);
-        inserted = true;
+    let targetRange = savedRange;
+    if (!targetRange && selection.rangeCount > 0 && App.dom.editor.contains(selection.anchorNode)) {
+      targetRange = selection.getRangeAt(0);
+    }
+    if (targetRange && App.dom.editor.contains(targetRange.commonAncestorContainer)) {
+      var container = targetRange.commonAncestorContainer;
+      if (container.nodeType === Node.TEXT_NODE) container = container.parentElement;
+      var wrappingP = container && container.closest ? container.closest('p') : null;
+      targetRange.deleteContents();
+      if (wrappingP && wrappingP.parentNode === App.dom.editor) {
+        targetRange.setStartAfter(wrappingP);
+        targetRange.collapse(true);
       }
+      targetRange.insertNode(wrapper);
+      inserted = true;
     }
 
     if (!inserted) {
@@ -236,6 +263,8 @@
     newRange.collapse(true);
     selection.removeAllRanges();
     selection.addRange(newRange);
+
+    App.dom.editor.focus();
 
     requestAnimationFrame(() => {
       const newScrollMax = App.dom.editor.scrollHeight - App.dom.editor.clientHeight;

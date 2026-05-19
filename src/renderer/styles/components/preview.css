@@ -129,6 +129,7 @@
   border: none;
   font-family: inherit;
   font-size: inherit;
+  white-space: pre;
 }
 
 .preview-content pre:not(.code-block-wrapper pre),

@@ -25,6 +25,7 @@ out/
 output/
 test/
 test-results/
+_backup-scripts/
 
 # 日志
 logs/

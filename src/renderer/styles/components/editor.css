@@ -349,7 +349,6 @@
 .editor-content tr:nth-child(even) { background: var(--bg-secondary); }
 .editor-content tr:hover { background: var(--bg-hover); }
 
-.editor-content .md-table { table-layout: fixed; }
 .editor-content .md-table th, .editor-content .md-table td { position: relative; }
 .editor-content .md-table .cell-content { display: block; min-height: 1em; }
 

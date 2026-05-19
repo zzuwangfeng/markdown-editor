@@ -3,12 +3,22 @@
   'use strict';
 
   function handleEditorKeydown(e) {
-    // 显示斜杠命令面板
+    // 显示斜杠命令面板（代码块内不触发）
     if (e.key === '/' && !App.state.slashPanelVisible) {
-      console.log('[handleEditorKeydown] slash pressed, App.state.slashPanelVisible:', App.state.slashPanelVisible);
-      e.preventDefault();
-      App.editor_slash_commands.showSlashPanel();
-      return;
+      const slashSel = window.getSelection();
+      let inCodeBlock = false;
+      if (slashSel.rangeCount > 0 && slashSel.anchorNode) {
+        const slashNode = slashSel.anchorNode;
+        const slashEl = slashNode.nodeType === Node.TEXT_NODE ? slashNode.parentElement : slashNode;
+        if (slashEl?.closest('.code-block') && App.dom.editor.contains(slashEl.closest('.code-block'))) {
+          inCodeBlock = true;
+        }
+      }
+      if (!inCodeBlock) {
+        e.preventDefault();
+        App.editor_slash_commands.showSlashPanel();
+        return;
+      }
     }
 
     // ESC 关闭面板
@@ -39,6 +49,7 @@
             newRange.collapse(true);
             selection.removeAllRanges();
             selection.addRange(newRange);
+            App.dom.editor.focus();
             return;
           }
         }
@@ -110,11 +121,9 @@
             const codeContent = codeBlock.querySelector('code') || codeBlock;
             const info = App.editor_code_block.getLineInfo(codeContent, range.startContainer, range.startOffset);
 
-            // 在最后一行末尾按回车 → 退出代码块
-            if (info.isLastLine && info.isAtLineEnd) {
+            if (info.isLastLine && info.isAtLineStart && info.isAtLineEnd) {
               App.editor_code_block.exitCodeBlock(codeBlock, 'after');
             } else {
-              // 正常插入换行
               const br = document.createElement('br');
               range.insertNode(br);
               range.setStartAfter(br);
@@ -184,6 +193,22 @@
             if (lineInfo.isLastLine && lineInfo.isAtLineEnd) {
               e.preventDefault();
               App.editor_code_block.exitCodeBlock(codeBlock, 'after');
+              return;
+            }
+            if ((lineInfo.isLastLine && !lineInfo.isAtLineEnd) ||
+                (range.startContainer.nodeType !== Node.TEXT_NODE && lineInfo.isFirstLine && lineInfo.isAtLineStart)) {
+              e.preventDefault();
+              const codeEl = codeBlock.querySelector('code') || codeBlock;
+              const nr = document.createRange();
+              const lc = codeEl.lastChild;
+              if (lc && lc.nodeType === Node.TEXT_NODE) {
+                nr.setStart(lc, lc.textContent.length);
+              } else {
+                nr.setStart(codeEl, codeEl.childNodes.length);
+              }
+              nr.collapse(true);
+              selection.removeAllRanges();
+              selection.addRange(nr);
               return;
             }
           }

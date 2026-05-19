@@ -6,10 +6,6 @@
     if (App.state.isPreviewMode) App.markdown_source_editor.renderPreview();
   }, 300);
 
-  const debouncedUpdateOutline = App.core_global.debounce(() => {
-    App.markdown_source_editor.updateOutline();
-  }, 300);
-
   function handleEditorInput() {
     try {
       App.dom.editorPlaceholder.style.display = App.dom.editor.innerHTML ? 'none' : 'block';
@@ -17,7 +13,7 @@
         App.dom.fileHeaderHint.style.display = App.dom.editor.innerHTML ? 'none' : 'block';
       }
       App.markdown_source_editor.updateStats();
-      debouncedUpdateOutline();
+      App.markdown_source_editor.updateOutline();
       App.theme.calculateReadingProgress();
 
       debouncedRenderPreview();

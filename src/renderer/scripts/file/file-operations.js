@@ -366,6 +366,7 @@
 
     App.markdown_source_editor.updateOutline();
     App.markdown_source_editor.updateStats();
+    App.markdown_source_editor.renderPreview();
 
     // 如果源码编辑器显示，同步更新源码和行号
     if (App.dom.mdSourceEditor && App.dom.mdSourceTextarea && App.dom.currentMdView === 'code') {
@@ -431,12 +432,6 @@
 
     App.state.isSaving = true;
     let content = App.converter.htmlToMarkdown(App.dom.editor.innerHTML);
-
-    // 调试：记录保存的内容前200字符
-    console.log('[saveCurrentFile] Markdown content (first 200):', content.substring(0, 200));
-    console.log('[saveCurrentFile] App.dom.editor.innerHTML snippet:', App.dom.editor.innerHTML.substring(0, 500));
-    console.log('[saveCurrentFile] Has .code-block-wrapper:', App.dom.editor.innerHTML.includes('code-block-wrapper'));
-    console.log('[saveCurrentFile] Has .code-block:', App.dom.editor.innerHTML.includes('code-block'));
 
     // 将图片绝对路径转换回相对路径再保存
     if (App.state.currentWorkspace) {
