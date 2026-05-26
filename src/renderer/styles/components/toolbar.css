@@ -236,8 +236,9 @@
   color: var(--success);
   opacity: 0;
   transition: opacity var(--transition);
-  margin-left: auto;
-  padding-right: 8px;
+  margin-left: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .save-status.visible { opacity: 1; }

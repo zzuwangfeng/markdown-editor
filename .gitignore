@@ -30,6 +30,7 @@ output/
 test/
 test-results/
 _backup-scripts/
+diagrams-zh/
 
 # 日志
 logs/

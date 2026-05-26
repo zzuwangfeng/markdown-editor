@@ -36,6 +36,8 @@
     "directories": {
       "output": "dist"
     },
+    "compression": "maximum",
+    "afterPack": "./afterPack.js",
     "mac": {
       "target": [
         "dmg"

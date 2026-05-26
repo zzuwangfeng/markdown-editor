@@ -5,10 +5,12 @@ module.exports = {
     appBundleId: 'com.flowmark.editor',
     appCategoryType: 'public.app-category.productivity',
     asar: true,
+    prune: true,
     ignore: (path) => {
       if (path === '') return false;
       if (/^\/\.(git|claude)/.test(path)) return true;
-      if (/^\/(dist|out|test|test-results|node_modules\/\.package-lock\.json)/.test(path)) return true;
+      if (/^\/(dist|out|test|test-results)/.test(path)) return true;
+      if (/node_modules\/\.package-lock\.json/.test(path)) return true;
       if (/node_modules\/.*\/test/.test(path)) return true;
       if (/node_modules\/.*\/__tests__/.test(path)) return true;
       if (/node_modules\/.*\/coverage/.test(path)) return true;

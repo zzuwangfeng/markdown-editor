@@ -372,6 +372,9 @@
           case 'a':
             html += '[' + processInlineElements(child) + '](' + child.href + ')';
             break;
+          case 'img':
+            html += '![' + (child.alt || '') + '](' + child.src + ')';
+            break;
           default:
             html += processInlineElements(child);
         }
