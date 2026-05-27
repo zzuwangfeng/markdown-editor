@@ -1,0 +1,77 @@
+/* CSS Variables - 浅色主题 */
+:root {
+  --bg-primary: #FFFFFF;
+  --bg-secondary: #F7F8FA;
+  --bg-hover: #F5F6F8;
+  --bg-active: #EFF6FF;
+  --text-primary: #1A1A1A;
+  --text-secondary: #6B7280;
+  --text-placeholder: #9CA3AF;
+  --border-color: #E5E7EB;
+  --border-input: #D1D5DB;
+  --accent: #3B82F6;
+  --accent-hover: #2563EB;
+  --accent-light: #EFF6FF;
+  --danger: #EF4444;
+  --success: #10B981;
+  --font-sans: "Inter", "SF Pro Text", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "SF Mono", "Fira Code", "Consolas", monospace;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --transition: 200ms ease;
+  --transition-fast: 150ms ease;
+  --transition-slow: 300ms ease;
+  --code-text: #333333;
+  --code-border: #eaeaea;
+  --code-bg: #F6F8FA;
+  --code-lang-color: #999999;
+  --code-scrollbar-thumb: #d9d9d9;
+  --code-scrollbar-hover: #bbbbbb;
+  --code-selection: #d7d9f9;
+}
+
+/* 深色主题 */
+[data-theme="dark"] {
+  --bg-primary: #1E1E1E;
+  --bg-secondary: #252526;
+  --bg-hover: #2D2D30;
+  --bg-active: #37373D;
+  --text-primary: #CCCCCC;
+  --text-secondary: #858585;
+  --text-placeholder: #5A5A5A;
+  --border-color: #3C3C3C;
+  --border-input: #4A4A4A;
+  --accent: #0D7CF0;
+  --accent-hover: #4090F0;
+  --accent-light: #264F78;
+  --code-text: #c9d1d9;
+  --code-border: #30363d;
+  --code-bg: #161B22;
+  --code-lang-color: #8b949e;
+  --code-scrollbar-thumb: #30363d;
+  --code-scrollbar-hover: #484f58;
+  --code-selection: #264f78;
+}
+
+/* 护眼 Sepia 主题 */
+[data-theme="sepia"] {
+  --bg-primary: #F4ECD8;
+  --bg-secondary: #EDE4CF;
+  --bg-hover: #E5D9C3;
+  --bg-active: #DBCFB3;
+  --text-primary: #5B4636;
+  --text-secondary: #7A6552;
+  --text-placeholder: #A08B74;
+  --border-color: #D4C4A8;
+  --border-input: #C4B498;
+  --accent: #8B7355;
+  --accent-hover: #7A6548;
+  --accent-light: #E8DCC8;
+  --code-text: #5b4636;
+  --code-border: #d4c4a8;
+  --code-bg: #EAE0C8;
+  --code-lang-color: #a08b74;
+  --code-scrollbar-thumb: #d4c4a8;
+  --code-scrollbar-hover: #bfaf93;
+  --code-selection: #dbc8a8;
+}
