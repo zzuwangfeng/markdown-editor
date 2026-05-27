@@ -1,1 +1,0 @@
-window.__App = { converter: null };
